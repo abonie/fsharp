@@ -1417,7 +1417,10 @@ and tripleQuoteString sargs skip = parse
       if kind.IsInterpolated && args.numDollars > 1 then
           let maxPercents = 2 * args.numDollars - 1
           if numPercents > maxPercents then
-              fail args lexbuf (0, FSComp.SR.lexCharNotAllowedInOperatorNames("%")) (result()) // XXX Should be "too many %s in interpolated string" or smth, also what's up with the last argument
+              let m2 = lexbuf.LexemeRange
+              let rest = result()
+              args.diagnosticsLogger.ErrorR(Error((0, FSComp.SR.lexCharNotAllowedInOperatorNames("%")), m2)) // TODO create new error
+              rest
           else
               let n = if numPercents < args.numDollars then
                         2 * numPercents
