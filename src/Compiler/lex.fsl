@@ -1419,7 +1419,7 @@ and tripleQuoteString sargs skip = parse
           if numPercents > maxPercents then
               let m2 = lexbuf.LexemeRange
               let rest = result()
-              args.diagnosticsLogger.ErrorR(Error((0, FSComp.SR.lexCharNotAllowedInOperatorNames("%")), m2)) // TODO create new error
+              args.diagnosticsLogger.ErrorR(Error(FSComp.SR.lexTooManyPercentsInTripleQuote(), m2))
               rest
           else
               let n = if numPercents < args.numDollars then
