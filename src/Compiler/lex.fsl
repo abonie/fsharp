@@ -1423,10 +1423,9 @@ and tripleQuoteString sargs skip = parse
           else
               // Add two % chars for each % that is supposed to be treated as regular string content
               // + 1 for a format specifier.
-              let percentsToEmit = if numPercents < args.delimLength then
-                        2 * numPercents
-                      else
-                        2 * (numPercents - args.delimLength) + 1
+              let percentsToEmit =
+                  if numPercents < args.delimLength then 2 * numPercents
+                  else 2 * (numPercents - args.delimLength) + 1
               let s = String.replicate percentsToEmit "%"
               addUnicodeString buf s
               result()
@@ -1441,6 +1440,7 @@ and tripleQuoteString sargs skip = parse
     { let (buf, fin, m, kind, args) = sargs
       let numBraces = String.length (lexeme lexbuf)
       if kind.IsInterpolated && args.delimLength = 1 then
+          // For every 2 '{' emit 1. Then, if there's an odd '{', start an interpolation expression.
           for _ in 2..2..numBraces do
               addUnicodeString buf "{"
           if numBraces % 2 = 0 then
@@ -1454,17 +1454,24 @@ and tripleQuoteString sargs skip = parse
       elif kind.IsInterpolated then
           if args.delimLength < 1 then
               fail args lexbuf (0, FSComp.SR.lexCharNotAllowedInOperatorNames("@")) () // XXX
+          // We are in an interpolated string with 2+ $ characters before the opening quotes.
+          // delimLength is total number of leading $s
+          // which is also the number of '{' needed to open interpolation expression.
           let maxBraces = 2 * args.delimLength - 1
           if numBraces > maxBraces then
+              // 2 * delimLength '{' in a row is dissallowed
               let m2 = lexbuf.LexemeRange
               args.stringNest <- (1, LexerStringStyle.TripleQuote, args.delimLength, m2) :: args.stringNest
               let cont = LexCont.Token(args.ifdefStack, args.stringNest)
               fail args lexbuf (FSComp.SR.lexTooManyLBracesInTripleQuote()) (fin.Finish buf kind (enum<LexerStringFinisherContext>(5)) cont) // XXX
           elif numBraces < args.delimLength then
+              // Less than delimLength means we treat '{' as normal content
               addUnicodeString buf (lexeme lexbuf)
               if not skip then STRING_TEXT (LexCont.String(args.ifdefStack, args.stringNest, LexerStringStyle.TripleQuote, kind, args.delimLength, m))
               else tripleQuoteString sargs skip lexbuf
           else
+              // A sequence of delimLength * '{' starts interpolation expression.
+              // Any extra '{' are treated as normal string content.
               let s = lexeme lexbuf
               addUnicodeString buf s[1..(numBraces - args.delimLength)] // XXX is it ok to addUnicode empty string? Also why start at 1?
               // get a new range for where the fill starts
