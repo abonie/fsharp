@@ -55,6 +55,173 @@ let escapeDotnetFormatString str =
     |> Seq.collect (fun x -> if x = '{' || x = '}' then [x;x] else [x])
     |> System.String.Concat
 
+let makeFmts (context: FormatStringCheckContext) (isInterpolated: bool) (fragRanges: range list) (fmt: string)=
+    let numFrags = fragRanges.Length
+    let sourceText = context.SourceText
+    let lineStartPositions = context.LineStartPositions
+    let length = sourceText.Length
+    let numDol =
+        if isInterpolated then
+            match fragRanges with
+            | [] -> 0 // XXX Should never get here in the 1st place if fragRanges is empty
+            | fstFrag :: _ ->
+                let startIndex = lineStartPositions[fstFrag.StartLine-1] + fstFrag.StartColumn
+                sourceText.GetSubTextString(startIndex, lineStartPositions[fstFrag.EndLine-1] + fstFrag.EndColumn - startIndex)
+                |> Seq.takeWhile ((=) '$') |> Seq.length
+        else
+            0
+    let mutable tripleQ = false
+    [ for i, fragRange in List.indexed fragRanges do
+        let m = fragRange
+        if m.StartLine - 1 < lineStartPositions.Length && m.EndLine - 1 < lineStartPositions.Length then
+            let startIndex = lineStartPositions[m.StartLine-1] + m.StartColumn
+            let endIndex = lineStartPositions[m.EndLine-1] + m.EndColumn
+            // Note, some extra """ text may be included at end of these snippets, meaning CheckFormatString in the IDE
+            // may be using a slightly false format string to colorize the %d markers.  This doesn't matter as there
+            // won't be relevant %d in these sections
+            //
+            // However we make an effort to remove these to keep the calls to GetSubStringText valid.  So
+            // we work out how much extra text there is at the end of the last line of the fragment,
+            // which may or may not be quote markers. If there's no flex, we don't trim the quote marks
+            let endNextLineIndex = if m.EndLine < lineStartPositions.Length then lineStartPositions[m.EndLine] else endIndex
+            let endIndexFlex = endNextLineIndex - endIndex
+            let mLength = endIndex - startIndex
+
+            //let startIndex2 = if m.StartLine < lineStartPositions.Length then lineStartPositions.[m.StartLine] else startIndex
+            //let sourceLineFromOffset = sourceText.GetSubTextString(startIndex, (startIndex2 - startIndex))
+            //printfn "i = %d, mLength = %d, endIndexFlex = %d, sourceLineFromOffset = <<<%s>>>" i mLength endIndexFlex sourceLineFromOffset
+
+            let dols = String.replicate numDol "$"
+            if isInterpolated && i=0 && startIndex < length-(numDol+3) && sourceText.SubTextEquals($"{dols}\"\"\"", startIndex) then
+                // Take of the ending triple quote or '{'
+                tripleQ <- true
+                let fragLength = mLength - (numDol+3) - min endIndexFlex (if i = numFrags-1 then 3 else numDol)
+                (numDol + 3, sourceText.GetSubTextString(startIndex + (numDol + 3), fragLength), m)
+            elif not isInterpolated && i=0 && startIndex < length-3 && sourceText.SubTextEquals("\"\"\"", startIndex) then
+                // Take of the ending triple quote or '{'
+                let fragLength = mLength - 2 - min endIndexFlex (if i = numFrags-1 then 3 else 1)
+                (3, sourceText.GetSubTextString(startIndex + 3, fragLength), m)
+            elif isInterpolated && i=0 && startIndex < length-3 && sourceText.SubTextEquals("$@\"", startIndex) then
+                // Take of the ending quote or '{', always length 1
+                let fragLength = mLength - 3 - min endIndexFlex 1
+                (3, sourceText.GetSubTextString(startIndex + 3, fragLength), m)
+            elif isInterpolated && i=0 && startIndex < length-3 && sourceText.SubTextEquals("@$\"", startIndex) then
+                // Take of the ending quote or '{', always length 1
+                let fragLength = mLength - 3 - min endIndexFlex 1
+                (3, sourceText.GetSubTextString(startIndex + 3, fragLength), m)
+            elif not isInterpolated && i=0 && startIndex < length-2 && sourceText.SubTextEquals("@\"", startIndex) then
+                // Take of the ending quote or '{', always length 1
+                let fragLength = mLength - 2 - min endIndexFlex 1
+                (2, sourceText.GetSubTextString(startIndex + 2, fragLength), m)
+            elif isInterpolated && i=0 && startIndex < length-2 && sourceText.SubTextEquals("$\"", startIndex) then
+                // Take of the ending quote or '{', always length 1
+                let fragLength = mLength - 2 - min endIndexFlex 1
+                (2, sourceText.GetSubTextString(startIndex + 2, fragLength), m)
+            elif isInterpolated && i <> 0 && startIndex < length-1 && sourceText.SubTextEquals("}", startIndex) then
+                // Take of the ending quote or '{', always length 1
+                let fragLength = mLength - 1 - min endIndexFlex (if i = numFrags-1 then (if tripleQ then 3 else 1) else numDol)
+                (1, sourceText.GetSubTextString(startIndex + 1, fragLength), m)
+            else
+                // Take of the ending quote or '{', always length 1
+                let fragLength = mLength - 1 - min endIndexFlex (if i = numFrags-1 then (if tripleQ then 3 else 1) else numDol)
+                (1, sourceText.GetSubTextString(startIndex + 1, fragLength), m)
+        else (1, fmt, m) ]
+
+module internal Parsing =
+
+    let flags (info: FormatInfoRegister) (fmt: string) (fmtPos: int) =
+        let len = fmt.Length
+        let rec go pos =
+            if pos >= len then failwith (FSComp.SR.forMissingFormatSpecifier())
+            match fmt[pos] with
+            | '-' -> 
+                if info.leftJustify then failwith (FSComp.SR.forFlagSetTwice("-"))
+                info.leftJustify <- true
+                go (pos+1)
+            | '+' -> 
+                if info.numPrefixIfPos <> None then failwith (FSComp.SR.forPrefixFlagSpacePlusSetTwice())
+                info.numPrefixIfPos <- Some '+'
+                go (pos+1)
+            | '0' -> 
+                if info.addZeros then failwith (FSComp.SR.forFlagSetTwice("0"))
+                info.addZeros <- true
+                go (pos+1)
+            | ' ' -> 
+                if info.numPrefixIfPos <> None then failwith (FSComp.SR.forPrefixFlagSpacePlusSetTwice())
+                info.numPrefixIfPos <- Some ' '
+                go (pos+1)
+            | '#' -> failwith (FSComp.SR.forHashSpecifierIsInvalid())
+            | _ -> pos
+        go fmtPos
+
+    let rec digitsPrecision (fmt: string) (fmtPos: int) =
+        if fmtPos >= fmt.Length then failwith (FSComp.SR.forBadPrecision())
+        match fmt[fmtPos] with
+        | c when System.Char.IsDigit c -> digitsPrecision fmt (fmtPos+1)
+        | _ -> fmtPos 
+
+    let precision (info: FormatInfoRegister) (fmt: string) (fmtPos: int) =
+        if fmtPos >= fmt.Length then failwith (FSComp.SR.forBadWidth())
+        match fmt[fmtPos] with
+        | c when System.Char.IsDigit c -> info.precision <- true; false,digitsPrecision fmt (fmtPos+1)
+        | '*' -> info.precision <- true; true,(fmtPos+1)
+        | _ -> failwith (FSComp.SR.forPrecisionMissingAfterDot())
+
+    let optionalDotAndPrecision (info: FormatInfoRegister) (fmt: string) (fmtPos: int) = 
+        if fmtPos >= fmt.Length then failwith (FSComp.SR.forBadPrecision())
+        match fmt[fmtPos] with
+        | '.' -> precision info fmt (fmtPos+1)
+        | _ -> false,fmtPos
+
+    let rec digitsWidthAndPrecision (info: FormatInfoRegister) (fmt: string) (fmtPos: int) (intAcc: int) =
+        let len = fmt.Length
+        let rec go pos n =
+            if pos >= len then failwith (FSComp.SR.forBadPrecision())
+            match fmt[pos] with
+            | c when System.Char.IsDigit c -> go (pos+1) (n*10 + int c - int '0') 
+            | _ -> Some n, optionalDotAndPrecision info fmt pos
+        go fmtPos intAcc
+
+    let widthAndPrecision (info: FormatInfoRegister) (fmt: string) (fmtPos: int) = 
+        if fmtPos >= fmt.Length then failwith (FSComp.SR.forBadPrecision())
+        match fmt[fmtPos] with
+        | c when System.Char.IsDigit c -> false,digitsWidthAndPrecision info fmt fmtPos 0
+        | '*' -> true, (None, optionalDotAndPrecision info fmt (fmtPos+1))
+        | _ -> false, (None, optionalDotAndPrecision info fmt fmtPos)
+
+    let position (fmt: string) (fmtPos: int) =
+        let len = fmt.Length
+
+        let rec digitsPosition pos n =
+            if pos >= len then failwith (FSComp.SR.forBadPrecision())
+            match fmt[pos] with
+            | c when System.Char.IsDigit c -> digitsPosition (pos+1) (n*10 + int c - int '0')
+            | '$' -> Some n, pos+1
+            | _ -> None, pos
+
+        match fmt[fmtPos] with
+        | c when c >= '1' && c <= '9' ->
+            let p, pos' = digitsPosition (int c - int '0') (fmtPos+1)
+            if p = None then None, fmtPos else p, pos'
+        | _ -> None, fmtPos
+
+    // Explicitly typed holes in interpolated strings "....%d{x}..." get additional '%P()' as a hole place marker
+    let skipPossibleInterpolationHole isInterpolated isFormattableString (fmt: string) i =
+        let len = fmt.Length
+        if isInterpolated then 
+            if i+1 < len && fmt[i] = '%' && fmt[i+1] = 'P'  then
+                let i = i + 2
+                if i+1 < len && fmt[i] = '('  && fmt[i+1] = ')' then 
+                    if isFormattableString then 
+                        failwith (FSComp.SR.forFormatInvalidForInterpolated4())
+                    i + 2
+                else 
+                    failwith (FSComp.SR.forFormatInvalidForInterpolated2())
+            else
+                failwith (FSComp.SR.forFormatInvalidForInterpolated())
+        else i
+
+
 let parseFormatStringInternal
         (m: range)
         (fragRanges: range list)
@@ -95,79 +262,10 @@ let parseFormatStringInternal
     //
     let escapeFormatStringEnabled = g.langVersion.SupportsFeature Features.LanguageFeature.EscapeDotnetFormattableStrings
 
-    let fmt, fragments = 
-
-        //printfn "--------------------" 
-        //printfn "context.IsSome = %b" context.IsSome
-        //printfn "fmt  = <<<%s>>>" fmt
-        //printfn "isInterpolated = %b" isInterpolated
-        //printfn "fragRanges = %A" fragRanges
-
+    let fmt, fragments =
         match context with
         | Some context when fragRanges.Length > 0 ->
-            let sourceText = context.SourceText
-            //printfn "sourceText.IsSome = %b" sourceText.IsSome
-            let lineStartPositions = context.LineStartPositions
-            //printfn "lineStartPositions.Length = %d" lineStartPositions.Length
-            let length = sourceText.Length
-            let numFrags = fragRanges.Length
-            let fmts =
-             [ for i, fragRange in List.indexed fragRanges do
-                let m = fragRange
-                //printfn "m.EndLine = %d" m.EndLine
-                if m.StartLine - 1 < lineStartPositions.Length && m.EndLine - 1 < lineStartPositions.Length then
-                    let startIndex = lineStartPositions[m.StartLine-1] + m.StartColumn
-                    let endIndex = lineStartPositions[m.EndLine-1] + m.EndColumn
-                    // Note, some extra """ text may be included at end of these snippets, meaning CheckFormatString in the IDE
-                    // may be using a slightly false format string to colorize the %d markers.  This doesn't matter as there
-                    // won't be relevant %d in these sections
-                    //
-                    // However we make an effort to remove these to keep the calls to GetSubStringText valid.  So
-                    // we work out how much extra text there is at the end of the last line of the fragment,
-                    // which may or may not be quote markers. If there's no flex, we don't trim the quote marks
-                    let endNextLineIndex = if m.EndLine < lineStartPositions.Length then lineStartPositions[m.EndLine] else endIndex
-                    let endIndexFlex = endNextLineIndex - endIndex
-                    let mLength = endIndex - startIndex
-
-                    //let startIndex2 = if m.StartLine < lineStartPositions.Length then lineStartPositions.[m.StartLine] else startIndex
-                    //let sourceLineFromOffset = sourceText.GetSubTextString(startIndex, (startIndex2 - startIndex))
-                    //printfn "i = %d, mLength = %d, endIndexFlex = %d, sourceLineFromOffset = <<<%s>>>" i mLength endIndexFlex sourceLineFromOffset
-
-                    if isInterpolated && i=0 && startIndex < length-4 && sourceText.SubTextEquals("$\"\"\"", startIndex) then
-                        // Take of the ending triple quote or '{'
-                        let fragLength = mLength - 4 - min endIndexFlex (if i = numFrags-1 then 3 else 1)
-                        (4, sourceText.GetSubTextString(startIndex + 4, fragLength), m)
-                    elif not isInterpolated && i=0 && startIndex < length-3 && sourceText.SubTextEquals("\"\"\"", startIndex) then
-                        // Take of the ending triple quote or '{'
-                        let fragLength = mLength - 2 - min endIndexFlex (if i = numFrags-1 then 3 else 1)
-                        (3, sourceText.GetSubTextString(startIndex + 3, fragLength), m)
-                    elif isInterpolated && i=0 && startIndex < length-3 && sourceText.SubTextEquals("$@\"", startIndex) then
-                        // Take of the ending quote or '{', always length 1
-                        let fragLength = mLength - 3 - min endIndexFlex 1
-                        (3, sourceText.GetSubTextString(startIndex + 3, fragLength), m)
-                    elif isInterpolated && i=0 && startIndex < length-3 && sourceText.SubTextEquals("@$\"", startIndex) then
-                        // Take of the ending quote or '{', always length 1
-                        let fragLength = mLength - 3 - min endIndexFlex 1
-                        (3, sourceText.GetSubTextString(startIndex + 3, fragLength), m)
-                    elif not isInterpolated && i=0 && startIndex < length-2 && sourceText.SubTextEquals("@\"", startIndex) then
-                        // Take of the ending quote or '{', always length 1
-                        let fragLength = mLength - 2 - min endIndexFlex 1
-                        (2, sourceText.GetSubTextString(startIndex + 2, fragLength), m)
-                    elif isInterpolated && i=0 && startIndex < length-2 && sourceText.SubTextEquals("$\"", startIndex) then
-                        // Take of the ending quote or '{', always length 1
-                        let fragLength = mLength - 2 - min endIndexFlex 1
-                        (2, sourceText.GetSubTextString(startIndex + 2, fragLength), m)
-                    elif isInterpolated && i <> 0 && startIndex < length-1 && sourceText.SubTextEquals("}", startIndex) then
-                        // Take of the ending quote or '{', always length 1
-                        let fragLength = mLength - 1 - min endIndexFlex 1
-                        (1, sourceText.GetSubTextString(startIndex + 1, fragLength), m)
-                    else
-                        // Take of the ending quote or '{', always length 1
-                        let fragLength = mLength - 1 - min endIndexFlex 1
-                        (1, sourceText.GetSubTextString(startIndex + 1, fragLength), m)
-                else (1, fmt, m) ]
-
-            //printfn "fmts = %A" fmts
+            let fmts = makeFmts context isInterpolated fragRanges fmt
 
             // Join the fragments with holes. Note this join is only used on the IDE path,
             // the CheckExpressions.fs does its own joining with the right alignments etc. substituted
@@ -178,8 +276,6 @@ let parseFormatStringInternal
                 (0, fmts) ||> List.mapFold (fun i (offset, fmt, fragRange) ->
                     (i, offset, fragRange), i + fmt.Length + 4) // the '4' is the length of '%P()' joins
 
-            //printfn "fmt2 = <<<%s>>>" fmt
-            //printfn "fragments = %A" fragments
             fmt, fragments
         | _ -> 
             // Don't muck with the fmt when there is no source code context to go get the original
@@ -200,7 +296,7 @@ let parseFormatStringInternal
 
     // fragLine, fragCol - track our location w.r.t. the marker for the start of this chunk
     // 
-    let rec parseLoop acc (i, fragLine, fragCol) fragments = 
+    let rec parseLoop acc (i, fragLine, fragCol) fragments =
        
        // Check if we've moved into the next fragment.  Note this will always activate on
        // the first step, i.e. when i=0
@@ -211,7 +307,6 @@ let parseFormatStringInternal
                struct (fragRange.StartLine, fragRange.StartColumn + fragOffset, rest)
 
            | _ -> struct (fragLine, fragCol, fragments)
-       //printfn "parseLoop: i = %d, fragLine = %d, fragCol = %d" i fragLine fragCol
 
        if i >= len then
            let argTys =
@@ -223,7 +318,7 @@ let parseFormatStringInternal
        elif System.Char.IsSurrogatePair(fmt,i) then 
           appendToDotnetFormatString fmt[i..i+1]
           parseLoop acc (i+2, fragLine, fragCol+2) fragments
-       else 
+       else
           let c = fmt[i]
           match c with
           | '%' ->
@@ -232,85 +327,16 @@ let parseFormatStringInternal
               let i = i+1 
               if i >= len then failwith (FSComp.SR.forMissingFormatSpecifier())
               let info = newInfo()
-
-              let rec flags i =
-                if i >= len then failwith (FSComp.SR.forMissingFormatSpecifier())
-                match fmt[i] with
-                | '-' -> 
-                    if info.leftJustify then failwith (FSComp.SR.forFlagSetTwice("-"))
-                    info.leftJustify <- true
-                    flags(i+1)
-                | '+' -> 
-                    if info.numPrefixIfPos <> None then failwith (FSComp.SR.forPrefixFlagSpacePlusSetTwice())
-                    info.numPrefixIfPos <- Some '+'
-                    flags(i+1)
-                | '0' -> 
-                    if info.addZeros then failwith (FSComp.SR.forFlagSetTwice("0"))
-                    info.addZeros <- true
-                    flags(i+1)
-                | ' ' -> 
-                    if info.numPrefixIfPos <> None then failwith (FSComp.SR.forPrefixFlagSpacePlusSetTwice())
-                    info.numPrefixIfPos <- Some ' '
-                    flags(i+1)
-                | '#' -> failwith (FSComp.SR.forHashSpecifierIsInvalid())
-                | _ -> i
-
-              let rec digitsPrecision i = 
-                if i >= len then failwith (FSComp.SR.forBadPrecision())
-                match fmt[i] with
-                | c when System.Char.IsDigit c -> digitsPrecision (i+1)
-                | _ -> i 
-
-              let precision i = 
-                if i >= len then failwith (FSComp.SR.forBadWidth())
-                match fmt[i] with
-                | c when System.Char.IsDigit c -> info.precision <- true; false,digitsPrecision (i+1)
-                | '*' -> info.precision <- true; true,(i+1)
-                | _ -> failwith (FSComp.SR.forPrecisionMissingAfterDot())
-
-              let optionalDotAndPrecision i = 
-                if i >= len then failwith (FSComp.SR.forBadPrecision())
-                match fmt[i] with
-                | '.' -> precision (i+1)
-                | _ -> false,i
-
-              let rec digitsWidthAndPrecision n i = 
-                if i >= len then failwith (FSComp.SR.forBadPrecision())
-                match fmt[i] with
-                | c when System.Char.IsDigit c -> digitsWidthAndPrecision (n*10 + int c - int '0') (i+1)
-                | _ -> Some n, optionalDotAndPrecision i
-
-              let widthAndPrecision i = 
-                if i >= len then failwith (FSComp.SR.forBadPrecision())
-                match fmt[i] with
-                | c when System.Char.IsDigit c -> false,digitsWidthAndPrecision 0 i
-                | '*' -> true, (None, optionalDotAndPrecision (i+1))
-                | _ -> false, (None, optionalDotAndPrecision i)
-
-              let rec digitsPosition n i =
-                  if i >= len then failwith (FSComp.SR.forBadPrecision())
-                  match fmt[i] with
-                  | c when System.Char.IsDigit c -> digitsPosition (n*10 + int c - int '0') (i+1)
-                  | '$' -> Some n, i+1
-                  | _ -> None, i
-
-              let position i =
-                  match fmt[i] with
-                  | c when c >= '1' && c <= '9' ->
-                      let p, i' = digitsPosition (int c - int '0') (i+1)
-                      if p = None then None, i else p, i'
-                  | _ -> None, i
-              
               let oldI = i
-              let posi, i = position i
+              let posi, i = Parsing.position fmt i
               let fragCol = fragCol + i - oldI
 
               let oldI = i
-              let i = flags i 
+              let i = Parsing.flags info fmt i
               let fragCol = fragCol + i - oldI
 
               let oldI = i
-              let widthArg,(widthValue, (precisionArg,i)) = widthAndPrecision i 
+              let widthArg,(widthValue, (precisionArg,i)) = Parsing.widthAndPrecision info fmt i
               let fragCol = fragCol + i - oldI
 
               if i >= len then failwith (FSComp.SR.forBadPrecision())
@@ -319,36 +345,14 @@ let parseFormatStringInternal
 
               let acc = if widthArg then (Option.map ((+)1) posi, g.int_ty) :: acc else acc 
 
-              let checkNoPrecision c =
+              let checkOtherFlags c = 
                   if info.precision then failwith (FSComp.SR.forFormatDoesntSupportPrecision(c.ToString()))
-
-              let checkNoZeroFlag c =
                   if info.addZeros then failwith (FSComp.SR.forDoesNotSupportZeroFlag(c.ToString()))
-
-              let checkNoNumericPrefix c =
                   match info.numPrefixIfPos with 
                   | Some n -> failwith (FSComp.SR.forDoesNotSupportPrefixFlag(c.ToString(), n.ToString()))
                   | None -> ()
 
-              let checkOtherFlags c = 
-                  checkNoPrecision c 
-                  checkNoZeroFlag c 
-                  checkNoNumericPrefix c
-
-              // Explicitly typed holes in interpolated strings "....%d{x}..." get additional '%P()' as a hole place marker
-              let skipPossibleInterpolationHole i =
-                  if isInterpolated then 
-                      if i+1 < len && fmt[i] = '%' && fmt[i+1] = 'P'  then
-                          let i = i + 2
-                          if i+1 < len && fmt[i] = '('  && fmt[i+1] = ')' then 
-                              if isFormattableString then 
-                                  failwith (FSComp.SR.forFormatInvalidForInterpolated4())
-                              i + 2
-                          else 
-                              failwith (FSComp.SR.forFormatInvalidForInterpolated2())
-                      else
-                          failwith (FSComp.SR.forFormatInvalidForInterpolated())
-                  else i
+              let skipPossibleInterpolationHole = Parsing.skipPossibleInterpolationHole isInterpolated isFormattableString fmt
 
               // Implicitly typed holes in interpolated strings are translated to '... %P(...)...' in the
               // type checker.  They should always have '(...)' after for format string.  
