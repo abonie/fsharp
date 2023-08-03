@@ -10,6 +10,7 @@ tests/
 vsintegration/*
 !vsintegration/src/FSharp.Editor
 !vsintegration/tests/FSharp.Editor.Tests
+!vsintegration/src/FSharp.VS.Debugger
 artifacts/
 
 # For some reason, it tries to format files from remotes (Processing .\.git\refs\remotes\<remote>\FSComp.fsi)

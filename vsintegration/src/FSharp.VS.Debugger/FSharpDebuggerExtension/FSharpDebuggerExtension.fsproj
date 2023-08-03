@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>FSharpDebuggerExtension</RootNamespace>
+    <AssemblyName>FSharpDebuggerExtension</AssemblyName>
+    <GeneratePkgDefFile>false</GeneratePkgDefFile>
+    <VsdConfigFile>..\..\..\..\artifacts\bin\FSharpDebuggerExtension\Debug\net472\FSharpDebuggerExtension.vsdconfig</VsdConfigFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="FSharpExpressionCompiler.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Debugger.Engine" Version="17.6.1041805" />
+    <PackageReference Include="Microsoft.VSSDK.Debugger.VSDConfigTool" Version="17.0.3041101">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <VsdConfigXmlFiles Include="ExpressionCompiler.vsdconfigxml" />
+  </ItemGroup>
+</Project>
