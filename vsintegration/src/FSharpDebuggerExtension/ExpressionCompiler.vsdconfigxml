@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+
+    Copyright (c) Microsoft. All rights reserved.
+    Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+    This is a configuration file that tells the debug engine about the existence of our Expression
+    Compiler component.  For documentation of the vsdconfigxml format see:
+    https://github.com/Microsoft/ConcordExtensibilitySamples/wiki/Component-discovery-and-configuration
+-->
+<Configuration xmlns="http://schemas.microsoft.com/vstudio/vsdconfig/2008">
+
+  <!-- This one was created in VS with Tools > Create GUID -->
+  <DefineGuid Name="guidFSharpExpressionCompilerCompId" Value="878C9C6D-7C7A-44C3-95BB-52D1EB14C772"/>
+  <!-- There is some guid in service.fs, this is where I took this magic value from. Look for GetDebuggerLanguageID -->
+  <DefineGuid Name="guidFSharpLanguageId" Value="ab4f38c9-b6e6-43ba-be3b-58080b2ccce3"/>
+
+  <!-- 9992000 is component level for IDE Expression Evaluation -->
+  <ManagedComponent
+    ComponentId="guidFSharpExpressionCompilerCompId"
+    ComponentLevel="9991900"
+    AssemblyName="FSharpDebuggerExtension"
+    Synchronized="true">
+
+    <Class Name="FSharpDebuggerExtension.ExpressionCompiler">
+      <Implements>
+        <InterfaceGroup>
+          <Filter>
+            <LanguageId RequiredValue="guidFSharpLanguageId"/>
+          </Filter>
+          <Interface Name="IDkmClrExpressionCompiler"/>
+        </InterfaceGroup>
+      </Implements>
+    </Class>
+
+  </ManagedComponent>
+
+</Configuration>

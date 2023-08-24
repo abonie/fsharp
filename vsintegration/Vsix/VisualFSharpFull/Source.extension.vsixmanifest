@@ -40,6 +40,8 @@
     <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.6,)" />
   </Dependencies>
   <Assets>
+    <Asset Type="DebuggerEngineExtension" d:Source="File" Path="FSharpDebuggerExtension.vsdconfig" />
+
     <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="File" Path="RegisterFsharpPackage.pkgdef" />
 
     <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="File" Path="FSharp.ProjectSystem.FSharp.pkgdef" />
