@@ -14,8 +14,4 @@
 
   <Import Project="VisualFSharp.Core.targets" />
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\FSharp.VS.Debugger\FSharpDebuggerExtension\FSharpDebuggerExtension.fsproj" />
-  </ItemGroup>
-
 </Project>

@@ -4,7 +4,7 @@
     <RootNamespace>FSharpDebuggerExtension</RootNamespace>
     <AssemblyName>FSharpDebuggerExtension</AssemblyName>
     <GeneratePkgDefFile>false</GeneratePkgDefFile>
-    <VsdConfigFile>..\..\..\..\artifacts\bin\FSharpDebuggerExtension\Debug\net472\FSharpDebuggerExtension.vsdconfig</VsdConfigFile>
+    <VsdConfigFile>..\..\..\artifacts\bin\FSharpDebuggerExtension\Debug\net472\FSharpDebuggerExtension.vsdconfig</VsdConfigFile>
   </PropertyGroup>
 
   <ItemGroup>

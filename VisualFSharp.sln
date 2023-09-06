@@ -195,7 +195,7 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Editor.Tests", "vsin
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FSharp.Editor.IntegrationTests", "vsintegration\tests\FSharp.Editor.IntegrationTests\FSharp.Editor.IntegrationTests.csproj", "{E31F9B59-FCF1-4D04-8762-C7BB60285A7B}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpDebuggerExtension", "vsintegration\src\FSharp.VS.Debugger\FSharpDebuggerExtension\FSharpDebuggerExtension.fsproj", "{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpDebuggerExtension", "src\FSharp.VS.Debugger\FSharpDebuggerExtension\FSharpDebuggerExtension.fsproj", "{B6CD9A59-3150-404F-BD45-3A29D157C33B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -1035,18 +1035,18 @@ Global
 		{E31F9B59-FCF1-4D04-8762-C7BB60285A7B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E31F9B59-FCF1-4D04-8762-C7BB60285A7B}.Release|x86.ActiveCfg = Release|Any CPU
 		{E31F9B59-FCF1-4D04-8762-C7BB60285A7B}.Release|x86.Build.0 = Release|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Debug|x86.Build.0 = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Proto|Any CPU.ActiveCfg = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Proto|Any CPU.Build.0 = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Proto|x86.ActiveCfg = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Proto|x86.Build.0 = Debug|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Release|x86.ActiveCfg = Release|Any CPU
-		{7EE6D8A0-ACEF-4D8D-B426-217698CBD9F4}.Release|x86.Build.0 = Release|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Debug|x86.Build.0 = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Proto|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Proto|Any CPU.Build.0 = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Proto|x86.ActiveCfg = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Proto|x86.Build.0 = Debug|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Release|x86.ActiveCfg = Release|Any CPU
+		{B6CD9A59-3150-404F-BD45-3A29D157C33B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

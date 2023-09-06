@@ -20,7 +20,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FSharp.Editor.IntegrationTests", "vsintegration\tests\FSharp.Editor.IntegrationTests\FSharp.Editor.IntegrationTests.csproj", "{42BE0F2F-BC45-437B-851D-E88A83201339}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Test.Utilities", "tests\FSharp.Test.Utilities\FSharp.Test.Utilities.fsproj", "{B7148170-93C5-4F2F-B31D-85316D3248CF}"
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpDebuggerExtension", "vsintegration\src\FSharp.VS.Debugger\FSharpDebuggerExtension\FSharpDebuggerExtension.fsproj", "{1E226D54-96EB-4A9D-A2CE-48AF06852E39}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpDebuggerExtension", "src\FSharp.VS.Debugger\FSharpDebuggerExtension\FSharpDebuggerExtension.fsproj", "{9D341465-6BF2-4519-85A9-3F15B972F547}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -77,12 +78,12 @@ Global
 		{B7148170-93C5-4F2F-B31D-85316D3248CF}.Proto|Any CPU.Build.0 = Debug|Any CPU
 		{B7148170-93C5-4F2F-B31D-85316D3248CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B7148170-93C5-4F2F-B31D-85316D3248CF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{1E226D54-96EB-4A9D-A2CE-48AF06852E39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1E226D54-96EB-4A9D-A2CE-48AF06852E39}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1E226D54-96EB-4A9D-A2CE-48AF06852E39}.Proto|Any CPU.ActiveCfg = Debug|Any CPU
-		{1E226D54-96EB-4A9D-A2CE-48AF06852E39}.Proto|Any CPU.Build.0 = Debug|Any CPU
-		{1E226D54-96EB-4A9D-A2CE-48AF06852E39}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1E226D54-96EB-4A9D-A2CE-48AF06852E39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D341465-6BF2-4519-85A9-3F15B972F547}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D341465-6BF2-4519-85A9-3F15B972F547}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D341465-6BF2-4519-85A9-3F15B972F547}.Proto|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D341465-6BF2-4519-85A9-3F15B972F547}.Proto|Any CPU.Build.0 = Debug|Any CPU
+		{9D341465-6BF2-4519-85A9-3F15B972F547}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D341465-6BF2-4519-85A9-3F15B972F547}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
