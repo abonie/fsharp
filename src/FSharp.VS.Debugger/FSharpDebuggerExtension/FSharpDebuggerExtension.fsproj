@@ -3,8 +3,9 @@
   <PropertyGroup>
     <RootNamespace>FSharpDebuggerExtension</RootNamespace>
     <AssemblyName>FSharpDebuggerExtension</AssemblyName>
+    <TargetFramework>net472</TargetFramework>
     <GeneratePkgDefFile>false</GeneratePkgDefFile>
-    <VsdConfigFile>..\..\..\artifacts\bin\FSharpDebuggerExtension\Debug\net472\FSharpDebuggerExtension.vsdconfig</VsdConfigFile>
+    <VsdConfigFile>$(ArtifactsDir)bin\FSharpDebuggerExtension\Debug\net472\FSharpDebuggerExtension.vsdconfig</VsdConfigFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,10 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Compiler\FSharp.Compiler.Service.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

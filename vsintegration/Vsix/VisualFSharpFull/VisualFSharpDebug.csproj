@@ -82,4 +82,8 @@
       </Content>
     </ItemGroup>
   </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\FSharp.VS.Debugger\FSharpDebuggerExtension\FSharpDebuggerExtension.fsproj" />
+  </ItemGroup>
 </Project>
