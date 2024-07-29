@@ -293,6 +293,7 @@ internal class FSharpLanguageServerProvider : LanguageServerProvider
         }
     }
 
+
     private void ProcessConfiguration(IProjectConfigurationSnapshot configuration)
     {
         var properties = configuration.Properties.Please();
@@ -301,8 +302,6 @@ internal class FSharpLanguageServerProvider : LanguageServerProvider
         var refNames = assemblyReferences.Select(r => r.Value.Name).ToList();
         var dimensions = configuration.ConfigurationDimensions.Please();
         var outputGroups = configuration.OutputGroups.Please();
-        var buildProperties = configuration.BuildProperties.Please();
-        var buildPropDictionary = buildProperties.Select(p => (p.Value.Name, p.Value.Value)).ToList();
         return;
     }
 
