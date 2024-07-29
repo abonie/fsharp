@@ -9,8 +9,8 @@
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
 		<PackageReference Include="Microsoft.CommonLanguageServerProtocol.Framework" Version="4.10.0-2.24105.6" />
 		<!--<PackageReference Include="Microsoft.CodeAnalysis.LanguageServer.Protocol" Version="4.10.0-1.24067.1" />-->
-		<PackageReference Include="Microsoft.VisualStudio.LanguageServer.Protocol" Version="17.10.34-preview" />
-		<PackageReference Include="StreamJsonRpc" Version="2.17.13" />
+		<PackageReference Include="Microsoft.VisualStudio.LanguageServer.Protocol" Version="17.11.9" />
+		<PackageReference Include="StreamJsonRpc" Version="2.18.48" />
 	</ItemGroup>
 
 	<ItemGroup>
