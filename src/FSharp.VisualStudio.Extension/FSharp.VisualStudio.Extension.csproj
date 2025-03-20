@@ -4,6 +4,9 @@
 		<Nullable>enable</Nullable>
 		<LangVersion>12</LangVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
+
+		<AssemblyVSIXSubPath>OutOfProc</AssemblyVSIXSubPath>
+		<CreateVsixContainer>false</CreateVsixContainer>
 		<!-- The VisualStudio.Extensibility preview packages are available from the azure-public/vside/msft_consumption feed -->
 
 	</PropertyGroup>
