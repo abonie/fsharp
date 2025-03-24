@@ -269,6 +269,15 @@
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <Private>True</Private>
     </ProjectReference>
+
+    <ProjectReference Include="..\..\..\src\FSharp.VisualStudio.Extension\FSharp.VisualStudio.Extension.csproj">
+      <Project>{9A19103F-16F7-4668-BE54-9A1E7A4F7556}</Project>
+      <Name>FSharp.VisualStudio.Extension</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <IncludeOutputGroupsInVSIX>ExtensionFilesOutputGroup</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>

@@ -84,16 +84,6 @@
   </Target>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\FSharp.VisualStudio.Extension\FSharp.VisualStudio.Extension.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
-      <IncludeInVSIX>true</IncludeInVSIX>
-      <!-- <IncludeOutputGroupsInVSIX>ExtensionFilesOutputGroup</IncludeOutputGroupsInVSIX> -->
-      <IncludeOutputGroupsInVSIX>BuiltProjectOutputGroup</IncludeOutputGroupsInVSIX>
-    </ProjectReference>
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="..\..\..\artifacts\obj\FSharp.VisualStudio.Extension\Debug\net8.0-windows\extension.json">
       <IncludeInVSIX>true</IncludeInVSIX>
       <VSIXSubPath>.vsextension</VSIXSubPath>
