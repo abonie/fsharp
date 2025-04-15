@@ -57,3 +57,31 @@ type LanguageFeaturesHandler() =
                 return SemanticTokens(Data = tokens)
             }
             |> CancellableTask.start cancellationToken
+
+    interface IRequestHandler<CompletionParams, SumType<CompletionList, CompletionItem[]>, FSharpRequestContext> with
+        [<LanguageServerEndpoint(Methods.TextDocumentCompletionName, LanguageServerConstants.DefaultLanguageName)>]
+        member _.HandleRequestAsync(request: CompletionParams, _context: FSharpRequestContext, cancellationToken: CancellationToken) =
+            cancellableTask {
+                // Get the document URI
+                let _documentUri = request.TextDocument.Uri
+                // Get position information
+                let _position = request.Position
+
+                // TODO: Query workspace for completions at position
+                // This would use context.Workspace.Query.GetCompletionsAtPosition or similar
+                // For now, we'll return a simple hard-coded completion list
+
+                let completionItems = [|
+                    CompletionItem(
+                        Label = "example-completion",
+                        Kind = CompletionItemKind.Function,
+                        Detail = "Example completion item",
+                        Documentation = SumType<string, MarkupContent>("This is a placeholder completion item")
+                    )
+                |]
+
+                // Return as SumType (either CompletionList or CompletionItem[])
+                // Here we choose to return the array variant
+                return SumType<CompletionList, CompletionItem[]>(completionItems)
+            }
+            |> CancellableTask.start cancellationToken

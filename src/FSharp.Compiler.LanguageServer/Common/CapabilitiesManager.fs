@@ -32,7 +32,15 @@ type CapabilitiesManager(config: FSharpLanguageServerConfig, scOverrides: IServe
                         Identifier = "potato",
                         WorkspaceDiagnostics = true
                     )),
-            //CompletionProvider = CompletionOptions(TriggerCharacters = [| "."; " " |], ResolveProvider = true, WorkDoneProgress = true),
+            CompletionProvider =
+                addIf
+                    config.EnabledFeatures.Completion
+                    // TODO: Change ResolveProvider to true once we implement completionIteom/resolve
+                    //       Also, investigate what is required for WorkDoneProgress support
+                    (CompletionOptions(
+                        TriggerCharacters = [| "."; " " |],
+                        ResolveProvider = false
+                    )),
             //HoverProvider = SumType<bool, HoverOptions>(HoverOptions(WorkDoneProgress = true))
             SemanticTokensOptions =
                 addIf
