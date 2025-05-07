@@ -334,7 +334,8 @@ type internal FSharpCompletionProvider
             let defines, langVersion, strictIndentation = document.GetFsharpParsingOptions()
 
             let shouldProvideCompletion =
-                CompletionUtils.shouldProvideCompletion (
+                document.Project.Solution.GetFSharpExtensionConfig().ShouldProduceCompletions()
+                && CompletionUtils.shouldProvideCompletion (
                     document.Id,
                     document.FilePath,
                     defines,

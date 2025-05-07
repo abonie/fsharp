@@ -46,10 +46,22 @@ namespace FSharp.VisualStudio.Extension
             Description = "%Which extension should be used to provide semantic highlighting%",
         };
 
+        [VisualStudioContribution]
+        public static Setting.Enum GetCompletionsFrom { get; } = new(
+            "getCompletionsFrom",
+            "%FSharpSettings.GetCompletionsFrom%",
+            FSharpCategory,
+            ExtensionChoice,
+            defaultValue: UNSET)
+        {
+            Description = "%Which extension should be used to provide completions%",
+        };
+
         public static Setting<string>[] AllStringSettings { get; } =
         [
             GetDiagnosticsFrom,
             GetSemanticHighlightingFrom,
+            GetCompletionsFrom,
         ];
     }
 }
