@@ -64,6 +64,9 @@ variables:
   - ${{ if and(eq(variables['System.TeamProject'], 'public'), eq(variables['Build.Reason'], 'PullRequest')) }}:
     - name: RunningAsPullRequest
       value: true
+  # GitHub PAT for posting error comments
+  - name: GitHubPAT
+    value: $(GITHUB_PAT)
   # Pick up pool provider name behavior from shared yaml template
   - template: /eng/common/templates/variables/pool-providers.yml
 
@@ -133,6 +136,14 @@ stages:
             continueOnError: true
             condition: not(succeeded())
 
+          # Extract and post errors to GitHub PR
+          - pwsh: ./eng/ExtractAndPostErrors.ps1
+            displayName: 'Extract and Post Errors to GitHub PR'
+            condition: failed()
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GitHubPAT)
+
           # Check FSComp.txt error code sorting and code formatting
         - job: CheckCodeFormatting
           pool:
@@ -162,6 +173,12 @@ stages:
             env:
               DOTNET_ROLL_FORWARD_TO_PRERELEASE: 1
             displayName: Check code formatting (run 'dotnet fantomas .' to fix)
+          - pwsh: ./eng/ExtractAndPostErrors.ps1
+            displayName: 'Extract and Post Errors to GitHub PR'
+            condition: failed()
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GitHubPAT)
 
         # Check whether package with current version has been published to nuget.org
         # We will try to restore both FSharp.Core and FCS and if restore is _successful_, package version needs to be bumped.
@@ -257,6 +274,13 @@ stages:
                 ArtifactType: Container
                 parallel: true
 
+          - pwsh: ./eng/ExtractAndPostErrors.ps1
+            displayName: 'Extract and Post Errors to GitHub PR'
+            condition: failed()
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GitHubPAT)
+
         - job: WindowsNoRealsig_testCoreclr
           pool:
             # The PR build definition sets this variable:
@@ -306,6 +330,13 @@ stages:
                 ArtifactName: 'Windows Release WindowsNoRealsig_testCoreclr process dumps'
                 ArtifactType: Container
                 parallel: true
+
+          - pwsh: ./eng/ExtractAndPostErrors.ps1
+            displayName: 'Extract and Post Errors to GitHub PR'
+            condition: failed()
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GitHubPAT)
 
         - job: WindowsNoRealsig_testDesktop
           pool:
@@ -358,6 +389,13 @@ stages:
                 ArtifactName: 'Windows Release WindowsNoRealsig_testDesktop process dumps $(System.JobPositionInPhase)'
                 ArtifactType: Container
                 parallel: true
+
+          - pwsh: ./eng/ExtractAndPostErrors.ps1
+            displayName: 'Extract and Post Errors to GitHub PR'
+            condition: failed()
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GitHubPAT)
 
         - job: WindowsStrictIndentation
           pool:
