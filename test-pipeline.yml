@@ -105,8 +105,7 @@ stages:
     or(
       eq(dependencies.build.result, 'Failed'),
       eq(dependencies.build.result, 'SucceededWithIssues')
-    )
-  )
+    ))
   jobs:
   - job: CollectAndReportFailures
     displayName: 'Test Failure Reporting Script'
