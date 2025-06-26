@@ -141,7 +141,6 @@ stages:
           -BuildId $(Build.BuildId)
           -Organization "$(System.TeamFoundationCollectionUri)"
           -Project "$(System.TeamProject)"
-          -AccessToken "$(SYSTEM_ACCESSTOKEN)"
           -GitHubToken "test-token-for-now"
           -Repository "$(Build.Repository.Name)"
           -PullRequestId $(System.PullRequest.PullRequestNumber)

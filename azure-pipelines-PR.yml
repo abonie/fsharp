@@ -912,11 +912,10 @@ stages:
       displayName: 'Report Build and Test Failures to GitHub PR'
       inputs:
         filePath: '$(Build.SourcesDirectory)/eng/scripts/Report-BuildFailures.ps1'
-        arguments: |
+        arguments: >-
           -BuildId $(Build.BuildId)
           -Organization "$(System.TeamFoundationCollectionUri)"
           -Project "$(System.TeamProject)"
-          -AccessToken "$(SYSTEM_ACCESSTOKEN)"
           -GitHubToken "$(GITHUB_TOKEN)"
           -Repository "$(Build.Repository.Name)"
           -PullRequestId $(System.PullRequest.PullRequestNumber)
