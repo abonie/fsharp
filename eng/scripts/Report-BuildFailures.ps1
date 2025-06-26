@@ -9,9 +9,6 @@ param(
     [string]$Project,
     
     [Parameter(Mandatory)]
-    [string]$AccessToken,
-    
-    [Parameter(Mandatory)]
     [string]$GitHubToken,
     
     [Parameter(Mandatory)]
@@ -26,7 +23,7 @@ param(
 
 # Set up authentication headers
 $azureHeaders = @{
-    'Authorization' = "Bearer $AccessToken"
+    'Authorization' = "Bearer $(env:SYSTEM_ACCESSTOKEN)"
     'Content-Type' = 'application/json'
 }
 
@@ -308,7 +305,7 @@ function Post-GitHubComment {
 if (-not $WhatIf) {
     # Set up authentication headers
     $azureHeaders = @{
-        'Authorization' = "Bearer $AccessToken"
+        'Authorization' = "Bearer $(env:SYSTEM_ACCESSTOKEN)"
         'Content-Type' = 'application/json'
     }
 
