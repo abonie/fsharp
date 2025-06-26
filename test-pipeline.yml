@@ -121,14 +121,13 @@ stages:
       inputs:
         targetType: 'inline'
         script: |
-          Write-Host "🔍 Pipeline Context for Real F# Build:"
+          Write-Host "Pipeline Context for Real F# Build:"
           Write-Host "  Build ID: $(Build.BuildId)"
           Write-Host "  Organization: $(System.TeamFoundationCollectionUri)"
           Write-Host "  Project: $(System.TeamProject)"
           Write-Host "  Repository: $(Build.Repository.Name)"
           Write-Host "  PR Number: $(System.PullRequest.PullRequestNumber)"
           Write-Host "  Build Reason: $(Build.Reason)"
-          Write-Host "  Build Result: $env:BUILD_RESULT"
           Write-Host "  Configuration: $(_BuildConfig)"
           Write-Host "  Test Kind: $(_TestKind)"
         pwsh: true
@@ -138,7 +137,7 @@ stages:
       displayName: 'Run Report-BuildFailures Script'
       inputs:
         filePath: '$(Build.SourcesDirectory)/eng/scripts/Report-BuildFailures.ps1'
-        arguments: |
+        arguments: >-
           -BuildId $(Build.BuildId)
           -Organization "$(System.TeamFoundationCollectionUri)"
           -Project "$(System.TeamProject)"
