@@ -311,8 +311,8 @@ function Publish-GitHubComment {
         return
     }
 
-    # Validate required report properties
-    if (-not $Report.PSObject.Properties['MarkdownContent'] -or [string]::IsNullOrWhiteSpace($Report.MarkdownContent)) {
+    # With this hashtable-friendly validation:
+    if (-not $Report.ContainsKey('MarkdownContent') -or [string]::IsNullOrWhiteSpace($Report.MarkdownContent)) {
         Write-Warning "❌ Report is missing MarkdownContent property"
         return
     }
