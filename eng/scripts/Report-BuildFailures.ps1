@@ -9,9 +9,6 @@ param(
     [string]$Project,
     
     [Parameter(Mandatory)]
-    [string]$GitHubToken,
-    
-    [Parameter(Mandatory)]
     [string]$Repository,
     
     [Parameter(Mandatory)]
@@ -28,7 +25,7 @@ $azureHeaders = @{
 }
 
 $githubHeaders = @{
-    'Authorization' = "token $GitHubToken"
+    'Authorization' = "token $env:GITHUB_TOKEN"
     'Accept' = 'application/vnd.github.v3+json'
     'User-Agent' = 'Azure-DevOps-Build-Reporter'
 }
@@ -289,13 +286,137 @@ function Format-FailureReport {
     return $report
 }
 
-# TODO: Implement GitHub comment posting
-function Post-GitHubComment {
-    param($Report, $Repository, $PullRequestId, $Headers)
-    
-    Write-Host "🚧 GitHub comment posting not yet implemented"
-    Write-Host "Would post to: https://github.com/$Repository/pull/$PullRequestId"
-    # Implementation will go here
+function Publish-GitHubComment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        $Report,
+        
+        [Parameter(Mandatory)]
+        [ValidatePattern('^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$')]
+        [string]$Repository,
+        
+        [Parameter(Mandatory)]
+        [ValidateRange(1, [int]::MaxValue)]
+        [int]$PullRequestId,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNull()]
+        [hashtable]$Headers
+    )
+
+    if (-not $Report.HasFailures) {
+        Write-Host "✅ No failures to report, skipping GitHub comment"
+        return
+    }
+
+    # Validate required report properties
+    if (-not $Report.PSObject.Properties['MarkdownContent'] -or [string]::IsNullOrWhiteSpace($Report.MarkdownContent)) {
+        Write-Warning "❌ Report is missing MarkdownContent property"
+        return
+    }
+
+    try {
+        # Construct URLs with validated inputs
+        $commentsUrl = "https://api.github.com/repos/$Repository/issues/$PullRequestId/comments"
+        $commentMarker = "<!-- F# CI Build Failure Report -->"
+
+        Write-Host "📡 Checking for existing failure report comments..."
+
+        # Get existing comments with error handling
+        $existingComments = $null
+        try {
+            $existingComments = Invoke-RestMethod -Uri $commentsUrl -Headers $Headers -Method Get -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "❌ Failed to retrieve existing comments: $($_.Exception.Message)"
+            throw
+        }
+
+        # Safely find existing report comment
+        $existingReportComment = $null
+        if ($existingComments -and $existingComments.Count -gt 0) {
+            $existingReportComment = $existingComments | Where-Object { 
+                $_.body -and $_.body.Contains($commentMarker) 
+            } | Select-Object -First 1
+        }
+
+        # Prepare the comment body with proper escaping
+        $sanitizedMarkdown = $Report.MarkdownContent -replace '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', ''
+        $commentBody = @"
+$commentMarker
+$sanitizedMarkdown
+"@
+
+        # Validate comment body length (GitHub has limits)
+        if ($commentBody.Length -gt 65536) {
+            Write-Warning "⚠️ Comment body is too long ($($commentBody.Length) chars), truncating..."
+            $commentBody = $commentBody.Substring(0, 65500) + "`n`n*[Content truncated due to length]*"
+        }
+
+        $requestBody = @{
+            body = $commentBody
+        } | ConvertTo-Json -Depth 10 -Compress
+
+        if ($existingReportComment) {
+            # Update existing comment
+            $updateUrl = "https://api.github.com/repos/$Repository/issues/comments/$($existingReportComment.id)"
+            Write-Host "🔄 Updating existing failure report comment (ID: $($existingReportComment.id))"
+
+            $response = Invoke-RestMethod -Uri $updateUrl -Headers $Headers -Method Patch -Body $requestBody -ContentType 'application/json'
+            Write-Host "✅ Successfully updated GitHub comment: $($response.html_url)"
+        } else {
+            # Create new comment
+            Write-Host "📝 Creating new failure report comment on PR #$PullRequestId"
+
+            $response = Invoke-RestMethod -Uri $commentsUrl -Headers $Headers -Method Post -Body $requestBody -ContentType 'application/json'
+            Write-Host "✅ Successfully posted GitHub comment: $($response.html_url)"
+        }
+
+    } catch {
+        $errorMessage = $_.Exception.Message
+        $statusCode = $null
+
+        Write-Warning "❌ Failed to post GitHub comment: $errorMessage"
+        
+        # Safely extract status code
+        if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
+            try {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+                Write-Warning "HTTP Status Code: $statusCode"
+            }
+            catch {
+                Write-Verbose "Could not extract status code from exception"
+            }
+        }
+
+        # Safely read error response with proper disposal
+        if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
+            $responseStream = $null
+            $reader = $null
+            try {
+                $responseStream = $_.Exception.Response.GetResponseStream()
+                if ($responseStream) {
+                    $reader = New-Object System.IO.StreamReader($responseStream)
+                    $responseBody = $reader.ReadToEnd()
+                    if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
+                        # Sanitize response body before logging (remove potential secrets)
+                        $sanitizedResponse = $responseBody -replace '"token":\s*"[^"]*"', '"token": "[REDACTED]"'
+                        Write-Warning "Response details: $sanitizedResponse"
+                    }
+                }
+            }
+            catch {
+                Write-Verbose "Could not read error response details: $($_.Exception.Message)"
+            }
+            finally {
+                # Properly dispose of resources
+                if ($reader) { $reader.Dispose() }
+                if ($responseStream) { $responseStream.Dispose() }
+            }
+        }
+    }
 }
 
 # ============================================================================
@@ -303,6 +424,15 @@ function Post-GitHubComment {
 # ============================================================================
 
 if (-not $WhatIf) {
+    # Validate required environment variables
+    if ([string]::IsNullOrEmpty($env:SYSTEM_ACCESSTOKEN)) {
+        throw "SYSTEM_ACCESSTOKEN environment variable is required but not set"
+    }
+    
+    if ([string]::IsNullOrEmpty($env:GITHUB_TOKEN)) {
+        throw "GitHubToken parameter is required but not provided"
+    }
+
     # Set up authentication headers
     $azureHeaders = @{
         'Authorization' = "Bearer $env:SYSTEM_ACCESSTOKEN"
@@ -310,7 +440,7 @@ if (-not $WhatIf) {
     }
 
     $githubHeaders = @{
-        'Authorization' = "token $GitHubToken"
+        'Authorization' = "token $env:GITHUB_TOKEN"
         'Accept' = 'application/vnd.github.v3+json'
         'User-Agent' = 'Azure-DevOps-Build-Reporter'
     }
@@ -321,27 +451,26 @@ if (-not $WhatIf) {
         # Step 1: Get failed jobs from build timeline
         Write-Host "📡 Fetching build timeline..."
         $failedJobs = Get-BuildTimeline -BuildId $BuildId -Headers $azureHeaders -Organization $Organization -Project $Project
-        
+
         # Step 2: Get test failures
         Write-Host "🧪 Fetching test failures..."
         $testFailures = Get-TestFailures -BuildId $BuildId -Headers $azureHeaders -Organization $Organization -Project $Project
-        
+
         # Step 3: Generate failure report
         $failureReport = Format-FailureReport -BuildErrors $failedJobs -TestFailures $testFailures -BuildId $BuildId -Organization $Organization -Project $Project
         
-        # Step 4: Post to GitHub PR (placeholder for now)
+        # Step 4: Post to GitHub PR
         if ($failureReport.HasFailures) {
             Write-Host "📝 Failure report generated:"
             Write-Host $failureReport.MarkdownContent
             Write-Host ""
-            Write-Host "⚠️ GitHub comment posting not yet implemented"
-            # TODO: Post-GitHubComment -Report $failureReport -Repository $Repository -PullRequestId $PullRequestId -Headers $githubHeaders
+            Publish-GitHubComment -Report $failureReport -Repository $Repository -PullRequestId $PullRequestId -Headers $githubHeaders
         } else {
             Write-Host "✅ No failures found to report"
         }
-        
+
     } catch {
-        Write-Error "❌ Failed to process build failures: $_"
+        Write-Error "❌ Failed to process build failures: $($_.Exception.Message)"
         exit 1
     }
 }
