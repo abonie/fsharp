@@ -42,6 +42,56 @@ stages:
     - checkout: self
       clean: true
 
+    # Clean up disk space by removing unnecessary folders
+    - task: PowerShell@2
+      displayName: 'Clean up disk space'
+      inputs:
+        targetType: 'inline'
+        script: |
+          Write-Host "Disk space before cleanup:"
+          Get-WmiObject -Class Win32_LogicalDisk | Select-Object DeviceID, @{Name="Size(GB)";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="FreeSpace(GB)";Expression={[math]::Round($_.FreeSpace/1GB,2)}}, @{Name="PercentFree";Expression={[math]::Round(($_.FreeSpace/$_.Size)*100,2)}} | Format-Table -AutoSize
+          
+          Write-Host "Removing Android SDK and Java folders to free up space..."
+          
+          # Remove Android SDK
+          $androidPath = "${env:ANDROID_HOME}"
+          if ($androidPath -and (Test-Path $androidPath)) {
+            Write-Host "Removing Android SDK from: $androidPath"
+            Remove-Item -Path $androidPath -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          
+          # Remove additional Android paths
+          $androidPaths = @(
+            "${env:ANDROID_SDK_ROOT}",
+            "${env:ProgramFiles(x86)}\Android",
+            "${env:ProgramData}\Microsoft\AndroidSDK"
+          )
+          foreach ($path in $androidPaths) {
+            if ($path -and (Test-Path $path)) {
+              Write-Host "Removing Android folder: $path"
+              Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+          
+          # Remove Java installations
+          $javaPaths = @(
+            "${env:JAVA_HOME}",
+            "${env:ProgramFiles}\Java",
+            "${env:ProgramFiles(x86)}\Java"
+          )
+          foreach ($path in $javaPaths) {
+            if ($path -and (Test-Path $path)) {
+              Write-Host "Removing Java folder: $path"
+              Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+          
+          Write-Host "Cleanup completed!"
+          Write-Host "Disk space after cleanup:"
+          Get-WmiObject -Class Win32_LogicalDisk | Select-Object DeviceID, @{Name="Size(GB)";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="FreeSpace(GB)";Expression={[math]::Round($_.FreeSpace/1GB,2)}}, @{Name="PercentFree";Expression={[math]::Round(($_.FreeSpace/$_.Size)*100,2)}} | Format-Table -AutoSize
+        pwsh: true
+      continueOnError: true
+
     # Set up .NET SDK (matching your real pipeline)
     - task: UseDotNet@2
       displayName: 'Install .NET SDK'
