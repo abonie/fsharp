@@ -29,9 +29,7 @@ stages:
   - job: WindowsCompressedMetadata
     displayName: 'Windows Tests (Compressed Metadata) - CoreCLR'
     pool:
-      #vmImage: 'windows-2022'  # Use Windows 2022 for latest tools
-      name: 'NetCore-Public'
-      demands: ImageOverride -equals 'Windows.vs2022.amd64.open'
+      vmImage: 'windows-latest'
     timeoutInMinutes: 60
     variables:
     - name: XUNIT_LOGS
@@ -50,16 +48,16 @@ stages:
         script: |
           Write-Host "Disk space before cleanup:"
           Get-WmiObject -Class Win32_LogicalDisk | Select-Object DeviceID, @{Name="Size(GB)";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="FreeSpace(GB)";Expression={[math]::Round($_.FreeSpace/1GB,2)}}, @{Name="PercentFree";Expression={[math]::Round(($_.FreeSpace/$_.Size)*100,2)}} | Format-Table -AutoSize
-          
+
           Write-Host "Removing Android SDK and Java folders to free up space..."
-          
+
           # Remove Android SDK
           $androidPath = "${env:ANDROID_HOME}"
           if ($androidPath -and (Test-Path $androidPath)) {
             Write-Host "Removing Android SDK from: $androidPath"
             Remove-Item -Path $androidPath -Recurse -Force -ErrorAction SilentlyContinue
           }
-          
+
           # Remove additional Android paths
           $androidPaths = @(
             "${env:ANDROID_SDK_ROOT}",
@@ -72,7 +70,7 @@ stages:
               Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
             }
           }
-          
+
           # Remove Java installations
           $javaPaths = @(
             "${env:JAVA_HOME}",
@@ -85,7 +83,7 @@ stages:
               Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
             }
           }
-          
+
           Write-Host "Cleanup completed!"
           Write-Host "Disk space after cleanup:"
           Get-WmiObject -Class Win32_LogicalDisk | Select-Object DeviceID, @{Name="Size(GB)";Expression={[math]::Round($_.Size/1GB,2)}}, @{Name="FreeSpace(GB)";Expression={[math]::Round($_.FreeSpace/1GB,2)}}, @{Name="PercentFree";Expression={[math]::Round(($_.FreeSpace/$_.Size)*100,2)}} | Format-Table -AutoSize
