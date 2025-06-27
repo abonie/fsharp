@@ -29,7 +29,9 @@ stages:
   - job: WindowsCompressedMetadata
     displayName: 'Windows Tests (Compressed Metadata) - CoreCLR'
     pool:
-      vmImage: 'windows-2022'  # Use Windows 2022 for latest tools
+      #vmImage: 'windows-2022'  # Use Windows 2022 for latest tools
+      name: 'NetCore-Public'
+      demands: ImageOverride -equals 'Windows.vs2022.amd64.open'
     timeoutInMinutes: 60
     variables:
     - name: XUNIT_LOGS
