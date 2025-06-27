@@ -376,45 +376,41 @@ $sanitizedMarkdown
 
     } catch {
         $errorMessage = $_.Exception.Message
-        $statusCode = $null
-
         Write-Warning "❌ Failed to post GitHub comment: $errorMessage"
         
-        # Safely extract status code
-        if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
-            try {
+        # Safely extract status code and response details
+        try {
+            if ($_.Exception.Response) {
                 $statusCode = [int]$_.Exception.Response.StatusCode
                 Write-Warning "HTTP Status Code: $statusCode"
-            }
-            catch {
-                Write-Verbose "Could not extract status code from exception"
-            }
-        }
-
-        # Safely read error response with proper disposal
-        if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) {
-            $responseStream = $null
-            $reader = $null
-            try {
-                $responseStream = $_.Exception.Response.GetResponseStream()
-                if ($responseStream) {
-                    $reader = New-Object System.IO.StreamReader($responseStream)
-                    $responseBody = $reader.ReadToEnd()
-                    if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
-                        # Sanitize response body before logging (remove potential secrets)
-                        $sanitizedResponse = $responseBody -replace '"token":\s*"[^"]*"', '"token": "[REDACTED]"'
-                        Write-Warning "Response details: $sanitizedResponse"
+                
+                # Safely read error response with proper disposal
+                $responseStream = $null
+                $reader = $null
+                try {
+                    $responseStream = $_.Exception.Response.GetResponseStream()
+                    if ($responseStream) {
+                        $reader = New-Object System.IO.StreamReader($responseStream)
+                        $responseBody = $reader.ReadToEnd()
+                        if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
+                            # Sanitize response body before logging (remove potential secrets)
+                            $sanitizedResponse = $responseBody -replace '"token":\s*"[^"]*"', '"token": "[REDACTED]"'
+                            Write-Warning "Response details: $sanitizedResponse"
+                        }
                     }
                 }
+                catch {
+                    Write-Verbose "Could not read error response details: $($_.Exception.Message)"
+                }
+                finally {
+                    # Properly dispose of resources
+                    if ($reader) { $reader.Dispose() }
+                    if ($responseStream) { $responseStream.Dispose() }
+                }
             }
-            catch {
-                Write-Verbose "Could not read error response details: $($_.Exception.Message)"
-            }
-            finally {
-                # Properly dispose of resources
-                if ($reader) { $reader.Dispose() }
-                if ($responseStream) { $responseStream.Dispose() }
-            }
+        }
+        catch {
+            Write-Verbose "Could not extract exception details: $($_.Exception.Message)"
         }
     }
 }
