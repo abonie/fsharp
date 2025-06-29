@@ -111,6 +111,64 @@ stages:
     # Enable OAuth token access for checkout
     - checkout: self
 
+    # Check if PR assignee is allowed to receive failure reports
+    - task: PowerShell@2
+      displayName: 'Check PR Assignee'
+      name: 'CheckAssignee'
+      inputs:
+        targetType: 'inline'
+        script: |
+          $allowedAssignees = @('abonie', 'copilot')
+          $shouldRunReport = $false
+          
+          try {
+            $prNumber = "$(System.PullRequest.PullRequestNumber)"
+            $repoName = "$(Build.Repository.Name)"
+            
+            if ([string]::IsNullOrEmpty($prNumber) -or [string]::IsNullOrEmpty($repoName)) {
+              Write-Host "⚠️ Missing PR number or repository name, skipping assignee check"
+              Write-Host "##vso[task.setvariable variable=shouldRunReport;isOutput=true]false"
+              exit 0
+            }
+            
+            # Get PR details from GitHub API
+            $headers = @{
+              'Authorization' = "token $env:GITHUB_TOKEN"
+              'Accept' = 'application/vnd.github.v3+json'
+              'User-Agent' = 'Azure-DevOps-Build-Reporter'
+            }
+            
+            $prUrl = "https://api.github.com/repos/$repoName/pulls/$prNumber"
+            Write-Host "🔍 Checking PR assignee for: $prUrl"
+            
+            $prData = Invoke-RestMethod -Uri $prUrl -Headers $headers -Method Get
+            
+            if ($prData.assignee) {
+              $assigneeLogin = $prData.assignee.login
+              Write-Host "👤 PR assignee: $assigneeLogin"
+              
+              if ($assigneeLogin -in $allowedAssignees) {
+                Write-Host "✅ Failure report is going to be generated for '$assigneeLogin'"
+                $shouldRunReport = $true
+              } else {
+                Write-Host "❌ Assignee '$assigneeLogin' will not receive a failure report"
+              }
+            } else {
+              Write-Host "ℹ️ PR has no assignee, skipping failure report"
+            }
+          }
+          catch {
+            Write-Warning "❌ Failed to check PR assignee: $($_.Exception.Message)"
+            Write-Host "Setting shouldRunReport to false due to error"
+          }
+          
+          Write-Host "##vso[task.setvariable variable=shouldRunReport;isOutput=true]$shouldRunReport"
+          Write-Host "Final decision: shouldRunReport = $shouldRunReport"
+        pwsh: true
+      env:
+        GITHUB_TOKEN: $(github-pat)
+      continueOnError: true
+
     # Debug: Show what we're working with
     - task: PowerShell@2
       displayName: 'Debug: Pipeline Context'
@@ -126,6 +184,7 @@ stages:
           Write-Host "  Build Reason: $(Build.Reason)"
           Write-Host "  Configuration: $(_BuildConfig)"
           Write-Host "  Test Kind: $(_TestKind)"
+          Write-Host "  Should Run Report: $(CheckAssignee.shouldRunReport)"
         pwsh: true
 
     # Test the actual script with real F# build data
@@ -143,5 +202,5 @@ stages:
       env:
         SYSTEM_ACCESSTOKEN: $(System.AccessToken)
         GITHUB_TOKEN: $(github-pat)
-      condition: always()
+      condition: and(always(), eq(variables['CheckAssignee.shouldRunReport'], 'true'))
       continueOnError: true
