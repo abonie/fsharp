@@ -319,25 +319,7 @@ function Publish-GitHubComment {
         $commentsUrl = "https://api.github.com/repos/$Repository/issues/$PullRequestId/comments"
         $commentMarker = "<!-- F# CI Build Failure Report -->"
 
-        Write-Host "📡 Checking for existing failure report comments..."
-
-        # Get existing comments with error handling
-        $existingComments = $null
-        try {
-            $existingComments = Invoke-RestMethod -Uri $commentsUrl -Headers $Headers -Method Get -ErrorAction Stop
-        }
-        catch {
-            Write-Warning "❌ Failed to retrieve existing comments: $($_.Exception.Message)"
-            throw
-        }
-
-        # Safely find existing report comment
-        $existingReportComment = $null
-        if ($existingComments -and $existingComments.Count -gt 0) {
-            $existingReportComment = $existingComments | Where-Object {
-                $_.body -and $_.body.Contains($commentMarker)
-            } | Select-Object -First 1
-        }
+        Write-Host "� Creating new failure report comment on PR #$PullRequestId"
 
         # Prepare the comment body with proper escaping
         $sanitizedMarkdown = $Report.MarkdownContent -replace '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', ''
@@ -359,20 +341,9 @@ $sanitizedMarkdown
             body = $commentBody
         } | ConvertTo-Json -Depth 10 -Compress
 
-        if ($existingReportComment) {
-            # Update existing comment
-            $updateUrl = "https://api.github.com/repos/$Repository/issues/comments/$($existingReportComment.id)"
-            Write-Host "🔄 Updating existing failure report comment (ID: $($existingReportComment.id))"
-
-            $response = Invoke-RestMethod -Uri $updateUrl -Headers $Headers -Method Patch -Body $requestBody -ContentType 'application/json'
-            Write-Host "✅ Successfully updated GitHub comment: $($response.html_url)"
-        } else {
-            # Create new comment
-            Write-Host "📝 Creating new failure report comment on PR #$PullRequestId"
-
-            $response = Invoke-RestMethod -Uri $commentsUrl -Headers $Headers -Method Post -Body $requestBody -ContentType 'application/json'
-            Write-Host "✅ Successfully posted GitHub comment: $($response.html_url)"
-        }
+        # Always create new comment
+        $response = Invoke-RestMethod -Uri $commentsUrl -Headers $Headers -Method Post -Body $requestBody -ContentType 'application/json'
+        Write-Host "✅ Successfully posted GitHub comment: $($response.html_url)"
 
     } catch {
         $errorMessage = $_.Exception.Message
