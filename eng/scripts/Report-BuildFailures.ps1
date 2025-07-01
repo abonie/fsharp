@@ -131,8 +131,15 @@ function Get-JobDisplayName {
 function Get-TestFailures {
     param($BuildId, $Headers, $Organization, $Project)
 
+    # Extract organization name from URL if a full URL was passed
+    $orgName = $Organization
+    if ($Organization -match 'https?://[^/]+/([^/]+)/?') {
+        $orgName = $matches[1]
+        Write-Host "🔧 Extracted organization name '$orgName' from URL '$Organization'"
+    }
+
     # Get test results directly by build ID using the resultsbybuild endpoint
-    $testResultsUri = "https://vstmr.dev.azure.com/$Organization/$Project/_apis/testresults/resultsbybuild?buildId=$BuildId&outcomes=Failed&outcomes=Aborted&outcomes=Timeout&api-version=7.1-preview.1"
+    $testResultsUri = "https://vstmr.dev.azure.com/$orgName/$Project/_apis/testresults/resultsbybuild?buildId=$BuildId&outcomes=Failed&outcomes=Aborted&outcomes=Timeout&api-version=7.1-preview.1"
 
     Write-Host "📊 Calling: $testResultsUri"
 

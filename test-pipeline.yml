@@ -203,7 +203,7 @@ stages:
         filePath: '$(Build.SourcesDirectory)/eng/scripts/Report-BuildFailures.ps1'
         arguments: >-
           -BuildId $(Build.BuildId)
-          -Organization "$(System.TeamFoundationCollectionUri)"
+          -Organization "$(System.CollectionUri)"
           -Project "$(System.TeamProject)"
           -Repository "$(Build.Repository.Name)"
           -PullRequestId $(System.PullRequest.PullRequestNumber)
