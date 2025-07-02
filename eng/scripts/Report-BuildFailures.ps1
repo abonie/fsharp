@@ -198,6 +198,8 @@ function Format-FailureReport {
 
     # Generate markdown report
     $markdown = @"
+@copilot
+
 ## 🔴 Build/Test Failures Report
 
 "@
@@ -206,7 +208,7 @@ function Format-FailureReport {
     if ($BuildErrors.Count -gt 0) {
         $markdown += @"
 
-### 🏗️ Build Failures ($($BuildErrors.Count))
+### 🏗️ Build Failures
 
 "@
 
@@ -214,10 +216,10 @@ function Format-FailureReport {
         foreach ($group in $groupedErrors) {
             $markdown += "**$($group.Name)**`n"
 
-            foreach ($error in $group.Group | Select-Object -First 3) {
-                $markdown += "- $($error.Category): $($error.Result)"
-                if ($error.Issues -and $error.Issues.Count -gt 0) {
-                    $firstIssue = $error.Issues[0]
+            foreach ($buildError in $group.Group | Select-Object -First 3) {
+                $markdown += "- $($buildError.Category): $($buildError.Result)"
+                if ($buildError.Issues -and $buildError.Issues.Count -gt 0) {
+                    $firstIssue = $buildError.Issues[0]
                     if ($firstIssue.message) {
                         $shortMessage = $firstIssue.message.Substring(0, [Math]::Min(100, $firstIssue.message.Length))
                         if ($firstIssue.message.Length -gt 100) { $shortMessage += "..." }
@@ -238,14 +240,20 @@ function Format-FailureReport {
     if ($TestFailures.Count -gt 0) {
         $markdown += @"
 
-### 🧪 Test Failures ($($TestFailures.Count))
+### 🧪 Test Failures
 
 "@
 
         $groupedTests = $TestFailures | Group-Object JobName
         foreach ($group in $groupedTests) {
             $jobDisplayName = Get-JobDisplayName -JobName $group.Name
-            $markdown += "**$jobDisplayName** - $($group.Count) failed tests`n"
+
+            # Add job display name to markdown only if it's not empty
+            if ([string]::IsNullOrWhiteSpace($jobDisplayName)) {
+                $markdown += "**$($group.Count) failed tests**`n"
+            } else {
+                $markdown += "**$jobDisplayName** - $($group.Count) failed tests`n"
+            }
 
             foreach ($test in $group.Group | Select-Object -First 5) {
                 $markdown += "- ``$($test.TestName)``"
@@ -267,12 +275,6 @@ function Format-FailureReport {
     # Summary Section
     $totalJobs = ($BuildErrors | Group-Object DisplayName).Count + ($TestFailures | Group-Object JobName).Count
     $markdown += @"
-
-### 📊 Summary
-- **Failed Jobs**: $totalJobs
-- **Build Errors**: $($BuildErrors.Count)
-- **Test Failures**: $($TestFailures.Count)
-
 [📋 View full build details]($($report.BuildUrl))
 
 ---
