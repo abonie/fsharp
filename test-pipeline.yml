@@ -111,6 +111,73 @@ stages:
     # Enable OAuth token access for checkout
     - checkout: self
 
+    # Check if PR assignee is allowed to receive failure reports
+    - task: PowerShell@2
+      displayName: 'Check PR Assignee'
+      name: 'CheckAssignee'
+      inputs:
+        targetType: 'inline'
+        script: |
+          $allowedAssignees = @('abonie', 'copilot')
+          $shouldRunReport = $false
+
+          try {
+            $prNumber = "$(System.PullRequest.PullRequestNumber)"
+            $repoName = "$(Build.Repository.Name)"
+
+            if ([string]::IsNullOrEmpty($prNumber) -or [string]::IsNullOrEmpty($repoName)) {
+              Write-Host "⚠️ Missing PR number or repository name, skipping assignee check"
+              Write-Host "##vso[task.setvariable variable=shouldRunReport;isOutput=true]false"
+              exit 0
+            }
+
+            # Get PR details from GitHub API
+            $headers = @{
+              'Authorization' = "token $env:GITHUB_TOKEN"
+              'Accept' = 'application/vnd.github.v3+json'
+              'User-Agent' = 'Azure-DevOps-Build-Reporter'
+            }
+
+            $prUrl = "https://api.github.com/repos/$repoName/pulls/$prNumber"
+            Write-Host "🔍 Checking PR assignee for: $prUrl"
+
+            $prData = Invoke-RestMethod -Uri $prUrl -Headers $headers -Method Get
+
+            # Check multiple assignees (modern field only)
+            $assigneeLogins = @()
+
+            if ($prData.assignees -and $prData.assignees.Count -gt 0) {
+              $assigneeLogins = $prData.assignees | ForEach-Object { $_.login }
+            }
+
+            if ($assigneeLogins.Count -gt 0) {
+              Write-Host "👤 PR assignee(s): $($assigneeLogins -join ', ')"
+
+              # Check if any assignee is in the allowed list
+              $allowedAssignee = $assigneeLogins | Where-Object { $_ -in $allowedAssignees } | Select-Object -First 1
+
+              if ($allowedAssignee) {
+                Write-Host "✅ Failure report will be generated (found allowed assignee: '$allowedAssignee')"
+                $shouldRunReport = $true
+              } else {
+                Write-Host "❌ No allowed assignees found. Assignees: $($assigneeLogins -join ', ')"
+              }
+            } else {
+              Write-Host "ℹ️ PR has no assignees, skipping failure report"
+            }
+          }
+          catch {
+            Write-Warning "❌ Failed to check PR assignee: $($_.Exception.Message)"
+            Write-Host "Setting shouldRunReport to false due to error"
+          }
+
+          Write-Host "##vso[task.setvariable variable=shouldRunReport;isOutput=true]$shouldRunReport"
+          Write-Host "Final decision: shouldRunReport = $shouldRunReport"
+        pwsh: true
+      env:
+        GITHUB_TOKEN: $(github-pat)
+      continueOnError: true
+
     # Debug: Show what we're working with
     - task: PowerShell@2
       displayName: 'Debug: Pipeline Context'
@@ -126,6 +193,7 @@ stages:
           Write-Host "  Build Reason: $(Build.Reason)"
           Write-Host "  Configuration: $(_BuildConfig)"
           Write-Host "  Test Kind: $(_TestKind)"
+          Write-Host "  Should Run Report: $(CheckAssignee.shouldRunReport)"
         pwsh: true
 
     # Test the actual script with real F# build data
@@ -135,7 +203,7 @@ stages:
         filePath: '$(Build.SourcesDirectory)/eng/scripts/Report-BuildFailures.ps1'
         arguments: >-
           -BuildId $(Build.BuildId)
-          -Organization "$(System.TeamFoundationCollectionUri)"
+          -Organization "$(System.CollectionUri)"
           -Project "$(System.TeamProject)"
           -Repository "$(Build.Repository.Name)"
           -PullRequestId $(System.PullRequest.PullRequestNumber)
@@ -143,5 +211,5 @@ stages:
       env:
         SYSTEM_ACCESSTOKEN: $(System.AccessToken)
         GITHUB_TOKEN: $(github-pat)
-      condition: always()
+      condition: and(always(), eq(variables['CheckAssignee.shouldRunReport'], 'true'))
       continueOnError: true
