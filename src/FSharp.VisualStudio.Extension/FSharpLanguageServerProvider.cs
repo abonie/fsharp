@@ -106,10 +106,29 @@ internal class VsDiagnosticsHandler
     [LanguageServerEndpoint("textDocument/_vs_getProjectContexts", LanguageServerConstants.DefaultLanguageName)]
     public Task<VSProjectContextList> HandleRequestAsync(VSGetProjectContextsParams request, FSharpRequestContext context, CancellationToken cancellationToken)
     {
+        var uri = request?.TextDocument?.Uri;
+        if (uri is null)
+        {
+            return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
+        }
+
+        var projectSnapshotOpt = context.Workspace.Query.GetProjectSnapshotForFile(uri);
+        if (FSharpOption<Compiler.CodeAnalysis.ProjectSnapshot.FSharpProjectSnapshot>.get_IsNone(projectSnapshotOpt))
+        {
+            return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
+        }
+
+        var projectSnapshot = projectSnapshotOpt!.Value;
+
         return Task.FromResult(new VSProjectContextList()
         {
             DefaultIndex = 0,
             ProjectContexts = [
+                new () {
+                    Id = projectSnapshot.ProjectId!.Value,
+                    Label = projectSnapshot.Label,
+                    Kind = VSProjectKind.FSharp
+                }
                 //new() {
                 //    Id = "potato",
                 //    Label = "Potato",
