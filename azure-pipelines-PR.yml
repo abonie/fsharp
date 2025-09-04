@@ -890,3 +890,38 @@ stages:
           - pwsh: .\tests\ILVerify\ilverify.ps1
             displayName: Run ILVerify
             workingDirectory: $(Build.SourcesDirectory)
+
+#- stage: report_failures
+#  displayName: Report Build and Test Failures
+#  dependsOn: build
+#  condition: and(
+#    always(),
+#    eq(variables['Build.Reason'], 'PullRequest'),
+#    or(
+#      eq(dependencies.build.result, 'Failed'),
+#      eq(dependencies.build.result, 'SucceededWithIssues')
+#    ))
+#  jobs:
+#  - job: CollectAndReportFailures
+#    displayName: 'Collect and Report Failures to GitHub'
+#    pool:
+#      vmImage: $(UbuntuMachineQueueName)
+#    steps:
+#    - checkout: self
+#
+#    - task: PowerShell@2
+#      displayName: 'Report Build and Test Failures to GitHub PR'
+#      inputs:
+#        filePath: '$(Build.SourcesDirectory)/eng/scripts/Report-BuildFailures.ps1'
+#        arguments: >-
+#          -BuildId $(Build.BuildId)
+#          -Organization "$(System.TeamFoundationCollectionUri)"
+#          -Project "$(System.TeamProject)"
+#          -GitHubToken "$(GITHUB_TOKEN)"
+#          -Repository "$(Build.Repository.Name)"
+#          -PullRequestId $(System.PullRequest.PullRequestNumber)
+#        pwsh: true
+#      env:
+#        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+#      condition: always()
+#      continueOnError: true
