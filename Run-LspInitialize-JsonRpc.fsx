@@ -20,16 +20,15 @@
       --verbose                       (log protocol traffic)
       --dumpStderr                    (mirror server stderr to console)
 
-    Design notes:
-      * Functional style with small pure helpers
-      * Minimal dependencies (System.Text.Json only)
-      * Structured log prefixes for easy parsing
+        Design notes:
+            * Functional style with small pure helpers
+            * Uses Newtonsoft.Json exclusively (aligns with StreamJsonRpc formatter)
+            * Structured log prefixes for easy parsing
 ***)
 
 open System
 open System.IO
 open System.Text
-open System.Text.Json
 open System.Diagnostics
 open System.Threading
 open System.Threading.Tasks
@@ -159,7 +158,9 @@ let run (opts:Options) : int =
                    capabilities = box {| |}
                    workspaceFolders = null
                    clientInfo = {| name = "FsxLspClient"; version = "0.1" |} |}
-            if opts.Verbose then Log.protoOut (System.Text.Json.JsonSerializer.Serialize {| jsonrpc = "2.0"; id = 1; method = "initialize"; ``params`` = initParams |})
+            if opts.Verbose then
+                let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("id",1); JProperty("method","initialize"); JProperty("params", JToken.FromObject(initParams)) |]).ToString(Formatting.None)
+                Log.protoOut env
             Log.info "Sending initialize request"
             let initOk =
                 match runWithTimeout (fun () -> rpc.InvokeAsync<obj>("initialize", initParams)) with
@@ -181,10 +182,14 @@ let run (opts:Options) : int =
                 4
             else
                 if opts.SendInitialized then
-                    if opts.Verbose then Log.protoOut (System.Text.Json.JsonSerializer.Serialize {| jsonrpc = "2.0"; method = "initialized"; ``params`` = {| |} |})
+                    if opts.Verbose then
+                        let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("method","initialized"); JProperty("params", JObject()) |]).ToString(Formatting.None)
+                        Log.protoOut env
                     Log.info "Sending initialized notification"
                     rpc.NotifyAsync("initialized", box {| |}) |> ignore
-                if opts.Verbose then Log.protoOut (System.Text.Json.JsonSerializer.Serialize {| jsonrpc = "2.0"; id = 2; method = "shutdown" |})
+                if opts.Verbose then
+                    let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("id",2); JProperty("method","shutdown") |]).ToString(Formatting.None)
+                    Log.protoOut env
                 Log.info "Sending shutdown request"
                 let shutdownOk =
                     match runWithTimeout (fun () -> rpc.InvokeAsync<obj>("shutdown")) with
@@ -205,7 +210,9 @@ let run (opts:Options) : int =
                         Log.error ($"Shutdown failed: {e}")
                         false
                 let exitCode = if shutdownOk then 0 else 5
-                if opts.Verbose then Log.protoOut (System.Text.Json.JsonSerializer.Serialize {| jsonrpc = "2.0"; method = "exit" |})
+                if opts.Verbose then
+                    let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("method","exit") |]).ToString(Formatting.None)
+                    Log.protoOut env
                 Log.info "Sending exit notification"
                 rpc.NotifyAsync("exit") |> ignore
                 rpc.Dispose()
