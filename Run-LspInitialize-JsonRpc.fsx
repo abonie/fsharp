@@ -96,6 +96,31 @@ module Log =
         let len = Encoding.UTF8.GetByteCount json
         printfn "[lsp<- %s %d] %s" (stamp()) len json
 
+// --------------------------- JSON Envelope Helpers ---------------------------
+
+module JsonEnvelope =
+    let private toJson (props: JProperty seq) =
+        JObject(props |> Seq.map id |> Seq.toArray).ToString(Formatting.None)
+
+    let request (id:int) (methodName:string) (parameters: JToken voption) =
+        seq {
+            yield JProperty("jsonrpc","2.0")
+            yield JProperty("id", id)
+            yield JProperty("method", methodName)
+            match parameters with
+            | ValueSome p -> yield JProperty("params", p)
+            | ValueNone -> ()
+        } |> toJson
+
+    let notification (methodName:string) (parameters: JToken voption) =
+        seq {
+            yield JProperty("jsonrpc","2.0")
+            yield JProperty("method", methodName)
+            match parameters with
+            | ValueSome p -> yield JProperty("params", p)
+            | ValueNone -> ()
+        } |> toJson
+
 // (Removed legacy manual wire protocol helpers; StreamJsonRpc now handles framing.)
 
 // --------------------------- Execution ---------------------------
@@ -159,8 +184,7 @@ let run (opts:Options) : int =
                    workspaceFolders = null
                    clientInfo = {| name = "FsxLspClient"; version = "0.1" |} |}
             if opts.Verbose then
-                let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("id",1); JProperty("method","initialize"); JProperty("params", JToken.FromObject(initParams)) |]).ToString(Formatting.None)
-                Log.protoOut env
+                Log.protoOut (JsonEnvelope.request 1 "initialize" (ValueSome (JToken.FromObject initParams)))
             Log.info "Sending initialize request"
             let initOk =
                 match runWithTimeout (fun () -> rpc.InvokeAsync<obj>("initialize", initParams)) with
@@ -183,13 +207,11 @@ let run (opts:Options) : int =
             else
                 if opts.SendInitialized then
                     if opts.Verbose then
-                        let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("method","initialized"); JProperty("params", JObject()) |]).ToString(Formatting.None)
-                        Log.protoOut env
+                        Log.protoOut (JsonEnvelope.notification "initialized" (ValueSome (JObject() :> JToken)))
                     Log.info "Sending initialized notification"
                     rpc.NotifyAsync("initialized", box {| |}) |> ignore
                 if opts.Verbose then
-                    let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("id",2); JProperty("method","shutdown") |]).ToString(Formatting.None)
-                    Log.protoOut env
+                    Log.protoOut (JsonEnvelope.request 2 "shutdown" ValueNone)
                 Log.info "Sending shutdown request"
                 let shutdownOk =
                     match runWithTimeout (fun () -> rpc.InvokeAsync<obj>("shutdown")) with
@@ -211,8 +233,7 @@ let run (opts:Options) : int =
                         false
                 let exitCode = if shutdownOk then 0 else 5
                 if opts.Verbose then
-                    let env = JObject([| JProperty("jsonrpc","2.0"); JProperty("method","exit") |]).ToString(Formatting.None)
-                    Log.protoOut env
+                    Log.protoOut (JsonEnvelope.notification "exit" ValueNone)
                 Log.info "Sending exit notification"
                 rpc.NotifyAsync("exit") |> ignore
                 rpc.Dispose()
