@@ -11,7 +11,7 @@
       * Support verbosity, stderr dumping, timeout, and skipping initialized notification
 
         Usage (from repo root):
-            dotnet fsi Run-LspInitialize-JsonRpc.fsx -- --configuration Debug --timeoutSeconds 15 --verbose --dumpStderr
+            dotnet fsi tests/LspIntegration/Run-LspInitialize-JsonRpc.fsx -- --configuration Debug --timeoutSeconds 15 --verbose --dumpStderr
 
     Flags:
       --configuration <Debug|Release> (default Debug)
@@ -32,11 +32,11 @@ open System.Text
 open System.Diagnostics
 open System.Threading
 open System.Threading.Tasks
-// Added for StreamJsonRpc-based implementation
-#r "artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/StreamJsonRpc.dll"
-#r "artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/Microsoft.VisualStudio.Validation.dll"
-#r "artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/System.IO.Pipelines.dll"
-#r "artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/Newtonsoft.Json.dll"
+// Added for StreamJsonRpc-based implementation (paths adjusted for tests/LspIntegration location)
+#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/StreamJsonRpc.dll"
+#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/Microsoft.VisualStudio.Validation.dll"
+#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/System.IO.Pipelines.dll"
+#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/Newtonsoft.Json.dll"
 open StreamJsonRpc
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
@@ -127,6 +127,7 @@ module JsonEnvelope =
 
 let run (opts:Options) : int =
     try
+        // Assume invocation from repo root for relative artifact paths
         let repoRoot = Directory.GetCurrentDirectory()
         let serverDir = Path.Combine(repoRoot, "artifacts", "bin", "FSharp.Compiler.LanguageServer", opts.Configuration, "net8.0")
         let exePath = Path.Combine(serverDir, "FSharp.Compiler.LanguageServer.exe")
