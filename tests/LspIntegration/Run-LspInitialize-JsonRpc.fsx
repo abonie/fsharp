@@ -1,5 +1,10 @@
 #!/usr/bin/env -S dotnet fsi
 
+// Load shared helpers first so their #r references are available before opens
+// Load shared helpers (resolved relative to this script directory)
+#load "Common.fsx"
+open Common
+
 (***
     Run-LspInitialize-JsonRpc.fsx
 
@@ -27,19 +32,14 @@
 ***)
 
 open System
-open System.IO
-open System.Text
 open System.Diagnostics
 open System.Threading
 open System.Threading.Tasks
-// Added for StreamJsonRpc-based implementation (paths adjusted for tests/LspIntegration location)
-#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/StreamJsonRpc.dll"
-#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/Microsoft.VisualStudio.Validation.dll"
-#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/System.IO.Pipelines.dll"
-#r "../../artifacts/bin/FSharp.Compiler.LanguageServer/Debug/net8.0/Newtonsoft.Json.dll"
-open StreamJsonRpc
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
+open StreamJsonRpc
+
+// Modules from Common.fsx: Log, JsonEnvelope, runWithTimeout, startServer
 
 // --------------------------- Argument Parsing ---------------------------
 
@@ -82,70 +82,17 @@ let parseArgs (argv: string array) : Result<Options,string> =
         | x -> Error ($"Unrecognized argument: {x}")
     loop defaultOptions 0
 
-// --------------------------- Logging Helpers ---------------------------
-
-module Log =
-    let inline private stamp() = DateTime.UtcNow.ToString("HH:mm:ss.fff", Globalization.CultureInfo.InvariantCulture)
-    let info  (m:string) = printfn "[info %s] %s"  (stamp()) m
-    let warn  (m:string) = printfn "[warn %s] %s"  (stamp()) m
-    let error (m:string) = eprintfn "[error %s] %s" (stamp()) m
-    let protoOut (json:string) =
-        let len = Encoding.UTF8.GetByteCount json
-        printfn "[lsp-> %s %d] %s" (stamp()) len json
-    let protoIn  (json:string) =
-        let len = Encoding.UTF8.GetByteCount json
-        printfn "[lsp<- %s %d] %s" (stamp()) len json
-
-// --------------------------- JSON Envelope Helpers ---------------------------
-
-module JsonEnvelope =
-    let private toJson (props: JProperty seq) =
-        JObject(props |> Seq.map id |> Seq.toArray).ToString(Formatting.None)
-
-    let request (id:int) (methodName:string) (parameters: JToken voption) =
-        seq {
-            yield JProperty("jsonrpc","2.0")
-            yield JProperty("id", id)
-            yield JProperty("method", methodName)
-            match parameters with
-            | ValueSome p -> yield JProperty("params", p)
-            | ValueNone -> ()
-        } |> toJson
-
-    let notification (methodName:string) (parameters: JToken voption) =
-        seq {
-            yield JProperty("jsonrpc","2.0")
-            yield JProperty("method", methodName)
-            match parameters with
-            | ValueSome p -> yield JProperty("params", p)
-            | ValueNone -> ()
-        } |> toJson
-
-// (Removed legacy manual wire protocol helpers; StreamJsonRpc now handles framing.)
-
 // --------------------------- Execution ---------------------------
 
 let run (opts:Options) : int =
     try
-        // Assume invocation from repo root for relative artifact paths
-        let repoRoot = Directory.GetCurrentDirectory()
-        let serverDir = Path.Combine(repoRoot, "artifacts", "bin", "FSharp.Compiler.LanguageServer", opts.Configuration, "net8.0")
-        let exePath = Path.Combine(serverDir, "FSharp.Compiler.LanguageServer.exe")
-        if not (File.Exists exePath) then
-            Log.error ($"Language server not found at {exePath}. Build the project first."); 2
-        else
-            Log.info ($"Starting server: {exePath}")
-            let psi = ProcessStartInfo()
-            psi.FileName <- exePath
-            psi.UseShellExecute <- false
-            psi.RedirectStandardInput <- true
-            psi.RedirectStandardOutput <- true
-            psi.RedirectStandardError <- true
-            psi.StandardOutputEncoding <- Encoding.UTF8
-            psi.StandardErrorEncoding <- Encoding.UTF8
-            let proc = Process.Start psi
-            if isNull proc then Log.error "Failed to start process"; 3 else
+        match startServer opts.Configuration with
+        | Error e -> Log.error e; 2
+        | Ok (proc, rpc) ->
             use _p = proc
+            use _rpc = rpc
+
+            // Optional stderr tail
             let stderrTask =
                 if opts.DumpStderr then
                     Task.Run(fun () ->
@@ -156,27 +103,10 @@ let run (opts:Options) : int =
                         with _ -> ())
                 else Task.CompletedTask
 
-            // Setup StreamJsonRpc
-            let input = proc.StandardOutput.BaseStream
-            let output = proc.StandardInput.BaseStream
-            let formatter = new JsonMessageFormatter()
-            let handler = new HeaderDelimitedMessageHandler(output, input, formatter)
-            use rpc = new JsonRpc(handler :> IJsonRpcMessageHandler)
             if opts.Verbose then
                 let listener = new TextWriterTraceListener(Console.Out)
                 rpc.TraceSource.Listeners.Add(listener) |> ignore
                 rpc.TraceSource.Switch.Level <- SourceLevels.Off
-            rpc.StartListening()
-
-            let timeoutSec = float opts.TimeoutSeconds
-            let runWithTimeout (op: unit -> Task<'T>) : Result<'T,string> =
-                try
-                    use cts = new CancellationTokenSource(TimeSpan.FromSeconds timeoutSec)
-                    let t = op()
-                    t.Wait(cts.Token)
-                    Ok t.Result
-                with :? OperationCanceledException -> Error "Timed out"
-                   | ex -> Error ex.Message
 
             let initParams =
                 {| processId = Process.GetCurrentProcess().Id
@@ -184,67 +114,66 @@ let run (opts:Options) : int =
                    capabilities = box {| |}
                    workspaceFolders = null
                    clientInfo = {| name = "FsxLspClient"; version = "0.1" |} |}
+
             if opts.Verbose then
                 Log.protoOut (JsonEnvelope.request 1 "initialize" (ValueSome (JToken.FromObject initParams)))
             Log.info "Sending initialize request"
+
             let initOk =
-                match runWithTimeout (fun () -> rpc.InvokeAsync<obj>("initialize", initParams)) with
+                match runWithTimeout opts.TimeoutSeconds (fun () -> rpc.InvokeAsync<obj>("initialize", initParams)) with
                 | Ok res ->
                     if opts.Verbose then
-                        let raw =
-                            match res with
-                            | :? JToken as jt -> jt.ToString(Formatting.None)
-                            | _ -> JsonConvert.SerializeObject(res, Formatting.None)
-                        // Wrap back into a response envelope for parity with legacy script
-                        let envelope = JsonConvert.SerializeObject(JObject([| JProperty("jsonrpc","2.0"); JProperty("id",1); JProperty("result", JToken.Parse(raw)) |]))
+                        let rawJson = JsonConvert.SerializeObject(res, Formatting.None)
+                        let envelope =
+                            JsonConvert.SerializeObject(
+                                JObject([| JProperty("jsonrpc","2.0"); JProperty("id",1); JProperty("result", JToken.Parse(rawJson)) |])
+                            )
                         Log.protoIn envelope
                     Log.info "Received initialize response"
                     true
-                | Error e ->
-                    Log.error ($"Initialize failed: {e}")
-                    false
-            if not initOk then
-                4
-            else
-                if opts.SendInitialized then
+                | Error e -> Log.error ($"Initialize failed: {e}"); false
+
+            if not initOk then 4 else
+            // initialized notification
+            if opts.SendInitialized then
+                if opts.Verbose then
+                    Log.protoOut (JsonEnvelope.notification "initialized" (ValueSome (JObject() :> JToken)))
+                Log.info "Sending initialized notification"
+                rpc.NotifyAsync("initialized", box {| |}) |> ignore
+
+            // shutdown
+            if opts.Verbose then Log.protoOut (JsonEnvelope.request 2 "shutdown" ValueNone)
+            Log.info "Sending shutdown request"
+            let shutdownOk =
+                match runWithTimeout opts.TimeoutSeconds (fun () -> rpc.InvokeAsync<obj>("shutdown")) with
+                | Ok res ->
                     if opts.Verbose then
-                        Log.protoOut (JsonEnvelope.notification "initialized" (ValueSome (JObject() :> JToken)))
-                    Log.info "Sending initialized notification"
-                    rpc.NotifyAsync("initialized", box {| |}) |> ignore
-                if opts.Verbose then
-                    Log.protoOut (JsonEnvelope.request 2 "shutdown" ValueNone)
-                Log.info "Sending shutdown request"
-                let shutdownOk =
-                    match runWithTimeout (fun () -> rpc.InvokeAsync<obj>("shutdown")) with
-                    | Ok res ->
-                        if opts.Verbose then
-                            let raw =
-                                match res with
-                                | :? JToken as jt -> jt.ToString(Formatting.None)
-                                | _ -> JsonConvert.SerializeObject(res, Formatting.None)
-                            let envelope = JsonConvert.SerializeObject(JObject([| JProperty("jsonrpc","2.0"); JProperty("id",2); JProperty("result", JToken.Parse(raw)) |]))
-                            Log.protoIn envelope
-                        Log.info "Shutdown response received"
-                        true
-                    | Error e when e.IndexOf("connection", StringComparison.OrdinalIgnoreCase) >= 0 ->
-                        Log.warn ($"Shutdown response not received before connection closed; assuming success ({e})")
-                        true
-                    | Error e ->
-                        Log.error ($"Shutdown failed: {e}")
-                        false
-                let exitCode = if shutdownOk then 0 else 5
-                if opts.Verbose then
-                    Log.protoOut (JsonEnvelope.notification "exit" ValueNone)
-                Log.info "Sending exit notification"
-                rpc.NotifyAsync("exit") |> ignore
-                rpc.Dispose()
-                let waitMs = int (TimeSpan.FromSeconds timeoutSec).TotalMilliseconds
-                if not (proc.WaitForExit waitMs) then
-                    Log.warn "Server did not exit in time; killing"
-                    try proc.Kill(true) with _ -> ()
-                stderrTask.Wait(500) |> ignore
-                Log.info "Done"
-                exitCode
+                        let rawJson = JsonConvert.SerializeObject(res, Formatting.None)
+                        let envelope =
+                            JsonConvert.SerializeObject(
+                                JObject([| JProperty("jsonrpc","2.0"); JProperty("id",2); JProperty("result", JToken.Parse(rawJson)) |])
+                            )
+                        Log.protoIn envelope
+                    Log.info "Shutdown response received"; true
+                | Error e when e.IndexOf("connection", StringComparison.OrdinalIgnoreCase) >= 0 ->
+                    Log.warn ($"Shutdown response not received before connection closed; assuming success ({e})"); true
+                | Error e -> Log.error ($"Shutdown failed: {e}"); false
+
+            let exitCode = if shutdownOk then 0 else 5
+
+            // exit notification
+            if opts.Verbose then Log.protoOut (JsonEnvelope.notification "exit" ValueNone)
+            Log.info "Sending exit notification"
+            rpc.NotifyAsync("exit") |> ignore
+
+            // Graceful wait
+            if not (proc.WaitForExit (opts.TimeoutSeconds * 1000)) then
+                Log.warn "Server did not exit in time; killing"
+                try proc.Kill(true) with _ -> ()
+
+            stderrTask.Wait(500) |> ignore
+            Log.info "Done"
+            exitCode
     with ex -> Log.error ($"Unhandled exception: {ex.Message}"); 99
 
 // --------------------------- Entry Point ---------------------------
