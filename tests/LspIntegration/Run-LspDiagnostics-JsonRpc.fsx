@@ -83,12 +83,10 @@ let parseArgs (argv: string array) : Result<Options,string> =
         | x -> Error ($"Unrecognized argument: {x}")
     loop defaultOptions 0
 
-// --------------------------- Sample F# code with diagnostic issues ---------------------------
-
-let diagnosticSample = """module DiagnosticSample
-let unused = 42
-let f x = x + ""  // type error expected
-"""
+// --------------------------- Workspace & Test File Setup ---------------------------
+// We now use a persistent test workspace under tests/LspIntegration/DiagnosticWorkspace
+// containing a file DiagnosticSample.fs with intentional diagnostic issues (type error & unused value).
+// This replaces the previous temp-file approach so rootUri/workspaceFolders are stable.
 
 // --------------------------- Diagnostic validation helpers ---------------------------
 
@@ -152,11 +150,30 @@ let run (opts: Options) : int =
                 else Task.CompletedTask
 
             // Initialize
+            // Define fixed workspace directory & file relative to repo root.
+            let repoRoot = Directory.GetCurrentDirectory()
+            let workspaceDir = Path.Combine(repoRoot, "tests", "LspIntegration", "DiagnosticWorkspace")
+            let filePath = Path.Combine(workspaceDir, "DiagnosticSample.fs")
+            let fileUri = Uri($"file:///{filePath.Replace('\\','/')}")
+            let rootDir = workspaceDir
+            let rootUriStr = Uri($"file:///{rootDir.Replace('\\','/').TrimEnd('/')}/").ToString().TrimEnd('/')
+            let workspaceName = Path.GetFileName(rootDir.TrimEnd(Path.DirectorySeparatorChar))
             let initParams =
+                // ClientCapabilities per LSP 3.17:
+                // - Advertise support for workspace folders: workspace.workspaceFolders = true
+                // - Advertise pull diagnostics capability via textDocument.diagnostic
+                //   (dynamicRegistration false; relatedDocumentSupport false for simplicity)
                 {| processId = Process.GetCurrentProcess().Id
-                   rootUri = (null : string)
-                   capabilities = box {| textDocument = {| diagnostic = {| |} |} |}
-                   workspaceFolders = null
+                   rootUri = rootUriStr
+                   capabilities =
+                       box
+                           {| workspace = {| workspaceFolders = true |}
+                              textDocument =
+                                  {| diagnostic =
+                                         {| dynamicRegistration = false
+                                            relatedDocumentSupport = false |} |} |}
+                   // Provide a single workspace folder entry so the server can resolve project context
+                   workspaceFolders = [| {| uri = rootUriStr; name = workspaceName |} |]
                    clientInfo = {| name = "FsxLspDiagnosticsClient"; version = "0.1" |} |}
             
             if opts.Verbose then
@@ -198,14 +215,13 @@ let run (opts: Options) : int =
                     Log.info "Sending initialized notification"
                     rpc.NotifyAsync("initialized", box {| |}) |> ignore
 
-                // Create temp file with diagnostic issues
-                let (fileUri, filePath) = makeTempFile "fs" diagnosticSample
-                Log.info ($"Created temp file: {filePath}")
+                Log.info ($"Using workspace file: {filePath}")
                 
                 try
                     // Send didOpen notification
+                    let fileText = File.ReadAllText filePath
                     let didOpenParams =
-                        {| textDocument = {| uri = fileUri.ToString(); languageId = "fsharp"; version = 1; text = diagnosticSample |} |}
+                        {| textDocument = {| uri = fileUri.ToString(); languageId = "fsharp"; version = 1; text = fileText |} |}
                     
                     if opts.Verbose then
                         Log.protoOut (JsonEnvelope.notification "textDocument/didOpen" (ValueSome (JToken.FromObject didOpenParams)))
@@ -221,7 +237,10 @@ let run (opts: Options) : int =
                     
                     if opts.Verbose then
                         Log.protoOut (JsonEnvelope.request 2 "textDocument/diagnostic" (ValueSome (JToken.FromObject diagnosticParams)))
-                    
+
+                    // Wait for keypress to proceed (for debugging)
+                    // Log.info "Press any key to send diagnostic request..."
+                    // Console.ReadKey() |> ignore
                     Log.info "Sending textDocument/diagnostic request"
                     let diagnosticResult =
                         match runWithTimeout opts.TimeoutSeconds (fun () -> rpc.InvokeAsync<obj>("textDocument/diagnostic", diagnosticParams)) with
@@ -292,8 +311,8 @@ let run (opts: Options) : int =
                         Log.info "Done"
                         exitCode
                 finally
-                    // Clean up temp file
-                    try File.Delete filePath with _ -> ()
+                    // No cleanup: file is part of repo workspace
+                    ()
     with ex -> 
         Log.error ($"Unhandled exception: {ex.Message}")
         99

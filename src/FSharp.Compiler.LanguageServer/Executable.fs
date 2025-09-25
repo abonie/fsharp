@@ -6,16 +6,14 @@ open StreamJsonRpc
 [<EntryPoint>]
 let main _argv =
 
-    let jsonRpc = new JsonRpc(Console.OpenStandardOutput(), Console.OpenStandardInput())
+    let outputHandler = new HeaderDelimitedMessageHandler(Console.OpenStandardOutput(), Console.OpenStandardInput())
+    let jsonRpc = new JsonRpc(outputHandler)
 
-    let _s = new FSharpLanguageServer(jsonRpc, (LspLogger Console.Out.Write))
+    let _s = new FSharpLanguageServer(jsonRpc, (LspLogger Console.Error.Write))
 
     jsonRpc.StartListening()
 
-    async {
-        while true do
-            do! Async.Sleep 1000
-    }
-    |> Async.RunSynchronously
+    // Wait for the JSON-RPC connection to complete (i.e., when the client disconnects)
+    jsonRpc.Completion.Wait()
 
     0
