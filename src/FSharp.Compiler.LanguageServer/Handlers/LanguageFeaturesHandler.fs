@@ -49,6 +49,17 @@ type LanguageFeaturesHandler() =
             }
             |> CancellableTask.start cancellationToken
 
+    interface IRequestHandler<
+        VSInternalDiagnosticParams,
+        VSInternalDiagnosticReport,
+        FSharpRequestContext
+    > with
+        [<LanguageServerEndpoint(VSInternalMethods.DocumentPullDiagnosticName, LanguageServerConstants.DefaultLanguageName)>]
+        member _.HandleRequestAsync
+            (request: VSInternalDiagnosticParams, context: FSharpRequestContext, cancellationToken: CancellationToken)
+            =
+            raise (System.NotImplementedException())
+
     interface IRequestHandler<SemanticTokensParams, SemanticTokens, FSharpRequestContext> with
         [<LanguageServerEndpoint(Methods.TextDocumentSemanticTokensFullName, LanguageServerConstants.DefaultLanguageName)>]
         member _.HandleRequestAsync(request: SemanticTokensParams, context: FSharpRequestContext, cancellationToken: CancellationToken) =
