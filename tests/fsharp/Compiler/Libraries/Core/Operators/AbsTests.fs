@@ -19,6 +19,7 @@ module ``Abs Tests`` =
         Assert.areEqual (abs -1n) 1n   // nativeint
         Assert.areEqual (abs -1L) 1L   // int64
         Assert.areEqual (abs -1I) 1I   // bigint
+        Assert.True false
 
     [<Fact>]
     let ``Abs of byte``() =
