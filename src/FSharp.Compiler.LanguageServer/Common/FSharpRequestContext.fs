@@ -4,15 +4,6 @@ open Microsoft.CommonLanguageServerProtocol.Framework
 open System.Threading
 open System.Threading.Tasks
 
-open System
-open System.Collections.Generic
-open Microsoft.VisualStudio.LanguageServer.Protocol
-
-open FSharp.Compiler.CodeAnalysis
-open FSharp.Compiler.EditorServices
-open FSharp.Compiler.Tokenization
-
-open System.Threading
 open FSharp.Compiler.CodeAnalysis.Workspace
 
 #nowarn "57"
