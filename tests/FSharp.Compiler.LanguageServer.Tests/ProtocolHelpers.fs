@@ -111,3 +111,14 @@ let openAndPullDiagnostics (client: TestRpcClient) (fileUri: Uri) (content: stri
         let! report = pullDiagnostics client fileUri
         return report.Items
     }
+
+let getProjectContexts (client: TestRpcClient) (fileUri: Uri) =
+    client.JsonRpc.InvokeAsync<VSProjectContextList>(
+        "textDocument/_vs_getProjectContexts",
+        VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileUri)))
+
+let setupMultiProjectFile (client: TestRpcClient) (content: string) (projectNames: string list) =
+    let fileOnDisk = sourceFileOnDisk content
+    for name in projectNames do
+        client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = name), [ fileOnDisk.LocalPath ]) |> ignore
+    fileOnDisk

@@ -12,18 +12,12 @@ open LanguageServer.ProtocolHelpers
 
 #nowarn "57"
 
-let getProjectContexts (client: TestRpcClient) (fileUri: Uri) =
-    client.JsonRpc.InvokeAsync<VSProjectContextList>(
-        "textDocument/_vs_getProjectContexts",
-        VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileUri)))
-
 [<Fact>]
 let ``GetProjectContexts returns single project for file in one project`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "let x = 1"
-        let fileOnDisk = setupSingleFileProject client content
-        do! openDocument client fileOnDisk content 1
+        let fileOnDisk = setupSingleFileProject client cleanCode
+        do! openDocument client fileOnDisk cleanCode 1
 
         let! result = getProjectContexts client fileOnDisk
         Assert.NotNull(result)
@@ -36,9 +30,8 @@ let ``GetProjectContexts returns single project for file in one project`` () =
 let ``GetProjectContexts returns FSharp project kind`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "let x = 1"
-        let fileOnDisk = setupSingleFileProject client content
-        do! openDocument client fileOnDisk content 1
+        let fileOnDisk = setupSingleFileProject client cleanCode
+        do! openDocument client fileOnDisk cleanCode 1
 
         let! result = getProjectContexts client fileOnDisk
         let ctx = result.ProjectContexts[0]
@@ -46,25 +39,24 @@ let ``GetProjectContexts returns FSharp project kind`` () =
     }
 
 [<Fact>]
-let ``GetProjectContexts returns project label`` () =
+let ``GetProjectContexts returns project label containing project file name`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "let x = 1"
-        let fileOnDisk = setupSingleFileProject client content
-        do! openDocument client fileOnDisk content 1
+        let fileOnDisk = setupSingleFileProject client cleanCode
+        do! openDocument client fileOnDisk cleanCode 1
 
         let! result = getProjectContexts client fileOnDisk
         let ctx = result.ProjectContexts[0]
         Assert.False(String.IsNullOrWhiteSpace(ctx.Label), "Project context should have a non-empty label")
+        Assert.EndsWith(".fsproj", ctx.Label)
     }
 
 [<Fact>]
 let ``GetProjectContexts returns project id`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "let x = 1"
-        let fileOnDisk = setupSingleFileProject client content
-        do! openDocument client fileOnDisk content 1
+        let fileOnDisk = setupSingleFileProject client cleanCode
+        do! openDocument client fileOnDisk cleanCode 1
 
         let! result = getProjectContexts client fileOnDisk
         let ctx = result.ProjectContexts[0]
@@ -75,8 +67,8 @@ let ``GetProjectContexts returns project id`` () =
 let ``GetProjectContexts returns empty list for file not in any project`` () =
     task {
         let! client = initializeLanguageServer None
-        let fileOnDisk = sourceFileOnDisk "let x = 1"
-        do! openDocument client fileOnDisk "let x = 1" 1
+        let fileOnDisk = sourceFileOnDisk cleanCode
+        do! openDocument client fileOnDisk cleanCode 1
 
         let! result = getProjectContexts client fileOnDisk
         Assert.NotNull(result)
@@ -89,11 +81,7 @@ let ``GetProjectContexts returns multiple contexts for file in multiple projects
     task {
         let! client = initializeLanguageServer None
         let content = "module Shared\nlet x = 1"
-        let fileOnDisk = sourceFileOnDisk content
-
-        // Add the same file to two different projects
-        let _pid1 = client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = "ProjectA"), [ fileOnDisk.LocalPath ])
-        let _pid2 = client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = "ProjectB"), [ fileOnDisk.LocalPath ])
+        let fileOnDisk = setupMultiProjectFile client content [ "ProjectA"; "ProjectB" ]
 
         do! openDocument client fileOnDisk content 1
 
@@ -108,10 +96,7 @@ let ``GetProjectContexts returns distinct labels for different projects`` () =
     task {
         let! client = initializeLanguageServer None
         let content = "module Shared\nlet x = 1"
-        let fileOnDisk = sourceFileOnDisk content
-
-        let _pid1 = client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = "ProjectA"), [ fileOnDisk.LocalPath ])
-        let _pid2 = client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = "ProjectB"), [ fileOnDisk.LocalPath ])
+        let fileOnDisk = setupMultiProjectFile client content [ "ProjectA"; "ProjectB" ]
 
         do! openDocument client fileOnDisk content 1
 
@@ -125,10 +110,7 @@ let ``GetProjectContexts returns distinct ids for different projects`` () =
     task {
         let! client = initializeLanguageServer None
         let content = "module Shared\nlet x = 1"
-        let fileOnDisk = sourceFileOnDisk content
-
-        let _pid1 = client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = "ProjectA"), [ fileOnDisk.LocalPath ])
-        let _pid2 = client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = "ProjectB"), [ fileOnDisk.LocalPath ])
+        let fileOnDisk = setupMultiProjectFile client content [ "ProjectA"; "ProjectB" ]
 
         do! openDocument client fileOnDisk content 1
 
@@ -138,13 +120,14 @@ let ``GetProjectContexts returns distinct ids for different projects`` () =
     }
 
 [<Fact>]
-let ``GetProjectContexts default index is zero`` () =
+let ``GetProjectContexts returns results for file not opened via didOpen`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "let x = 1"
-        let fileOnDisk = setupSingleFileProject client content
-        do! openDocument client fileOnDisk content 1
+        let fileOnDisk = setupSingleFileProject client cleanCode
 
         let! result = getProjectContexts client fileOnDisk
-        Assert.Equal(0, result.DefaultIndex)
+        Assert.NotNull(result)
+        Assert.NotNull(result.ProjectContexts)
+        Assert.Equal(1, result.ProjectContexts.Length)
+        Assert.Equal(VSProjectKind.FSharp, result.ProjectContexts[0].Kind)
     }
