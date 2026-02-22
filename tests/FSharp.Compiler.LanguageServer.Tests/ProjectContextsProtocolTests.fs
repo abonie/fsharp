@@ -5,8 +5,6 @@ open Xunit
 
 open Microsoft.VisualStudio.LanguageServer.Protocol
 open FSharp.Test.ProjectGeneration.WorkspaceHelpers
-open FSharp.Compiler.CodeAnalysis.Workspace
-open FSharp.Compiler.CodeAnalysis.ProjectSnapshot
 
 open LanguageServer.ProtocolHelpers
 
@@ -74,47 +72,35 @@ let ``GetProjectContexts returns empty list for file not in any project`` () =
         Assert.NotNull(result)
         Assert.NotNull(result.ProjectContexts)
         Assert.Equal(0, result.ProjectContexts.Length)
+        Assert.Equal(0, result.DefaultIndex)
     }
 
 [<Fact>]
-let ``GetProjectContexts returns multiple contexts for file in multiple projects`` () =
+let ``GetProjectContexts returns multiple contexts with FSharp kind for file in multiple projects`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "module Shared\nlet x = 1"
-        let fileOnDisk = setupMultiProjectFile client content [ "ProjectA"; "ProjectB" ]
+        let fileOnDisk = setupMultiProjectFile client sharedModuleContent [ "ProjectA"; "ProjectB" ]
 
-        do! openDocument client fileOnDisk content 1
+        do! openDocument client fileOnDisk sharedModuleContent 1
 
         let! result = getProjectContexts client fileOnDisk
         Assert.NotNull(result)
         Assert.True(result.ProjectContexts.Length >= 2, $"Expected at least 2 project contexts but got {result.ProjectContexts.Length}")
         Assert.Equal(0, result.DefaultIndex)
+        Assert.All(result.ProjectContexts, fun c -> Assert.Equal(VSProjectKind.FSharp, c.Kind))
     }
 
 [<Fact>]
-let ``GetProjectContexts returns distinct labels for different projects`` () =
+let ``GetProjectContexts returns distinct labels and ids for different projects`` () =
     task {
         let! client = initializeLanguageServer None
-        let content = "module Shared\nlet x = 1"
-        let fileOnDisk = setupMultiProjectFile client content [ "ProjectA"; "ProjectB" ]
+        let fileOnDisk = setupMultiProjectFile client sharedModuleContent [ "ProjectA"; "ProjectB" ]
 
-        do! openDocument client fileOnDisk content 1
+        do! openDocument client fileOnDisk sharedModuleContent 1
 
         let! result = getProjectContexts client fileOnDisk
         let labels = result.ProjectContexts |> Array.map (fun c -> c.Label) |> Array.distinct
         Assert.Equal(result.ProjectContexts.Length, labels.Length)
-    }
-
-[<Fact>]
-let ``GetProjectContexts returns distinct ids for different projects`` () =
-    task {
-        let! client = initializeLanguageServer None
-        let content = "module Shared\nlet x = 1"
-        let fileOnDisk = setupMultiProjectFile client content [ "ProjectA"; "ProjectB" ]
-
-        do! openDocument client fileOnDisk content 1
-
-        let! result = getProjectContexts client fileOnDisk
         let ids = result.ProjectContexts |> Array.map (fun c -> c.Id) |> Array.distinct
         Assert.Equal(result.ProjectContexts.Length, ids.Length)
     }

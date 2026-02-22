@@ -117,6 +117,9 @@ let getProjectContexts (client: TestRpcClient) (fileUri: Uri) =
         "textDocument/_vs_getProjectContexts",
         VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileUri)))
 
+[<Literal>]
+let sharedModuleContent = "module Shared\nlet x = 1"
+
 let setupMultiProjectFile (client: TestRpcClient) (content: string) (projectNames: string list) =
     let fileOnDisk = sourceFileOnDisk content
     for name in projectNames do
