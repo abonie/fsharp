@@ -20,10 +20,7 @@ let ``ProjectContexts returns single context for file in one project`` () =
         let fileOnDisk = setupSingleFileProject client cleanCode
         do! openDocument client fileOnDisk cleanCode 1
 
-        let request = VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileOnDisk))
-
-        let! result =
-            client.JsonRpc.InvokeAsync<VSProjectContextList>("textDocument/_vs_getProjectContexts", request)
+        let! result = pullProjectContexts client fileOnDisk
 
         Assert.NotNull(result)
         Assert.NotNull(result.ProjectContexts)
@@ -31,6 +28,7 @@ let ``ProjectContexts returns single context for file in one project`` () =
         Assert.Equal(0, result.DefaultIndex)
         Assert.False(String.IsNullOrWhiteSpace(result.ProjectContexts[0].Label))
         Assert.False(String.IsNullOrWhiteSpace(result.ProjectContexts[0].Id))
+        Assert.Equal(VSProjectKind.FSharp, result.ProjectContexts[0].Kind)
     }
 
 [<Fact>]
@@ -44,15 +42,18 @@ let ``ProjectContexts returns multiple contexts for shared file`` () =
 
         do! openDocument client sharedFile cleanCode 1
 
-        let request = VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = sharedFile))
-
-        let! result =
-            client.JsonRpc.InvokeAsync<VSProjectContextList>("textDocument/_vs_getProjectContexts", request)
+        let! result = pullProjectContexts client sharedFile
 
         Assert.NotNull(result)
         Assert.NotNull(result.ProjectContexts)
         Assert.True(result.ProjectContexts.Length >= 2, $"Expected at least 2 project contexts but got {result.ProjectContexts.Length}")
         Assert.Equal(0, result.DefaultIndex)
+
+        let ids = result.ProjectContexts |> Array.map (fun c -> c.Id) |> Array.distinct
+        Assert.Equal(result.ProjectContexts.Length, ids.Length)
+
+        Assert.All(result.ProjectContexts, fun c ->
+            Assert.Equal(VSProjectKind.FSharp, c.Kind))
     }
 
 [<Fact>]
@@ -62,10 +63,7 @@ let ``ProjectContexts returns empty array for file not in any project`` () =
         let fileOnDisk = sourceFileOnDisk cleanCode
         do! openDocument client fileOnDisk cleanCode 1
 
-        let request = VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileOnDisk))
-
-        let! result =
-            client.JsonRpc.InvokeAsync<VSProjectContextList>("textDocument/_vs_getProjectContexts", request)
+        let! result = pullProjectContexts client fileOnDisk
 
         Assert.NotNull(result)
         Assert.NotNull(result.ProjectContexts)
