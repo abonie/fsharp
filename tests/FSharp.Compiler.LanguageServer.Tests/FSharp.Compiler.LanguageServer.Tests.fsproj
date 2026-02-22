@@ -16,6 +16,7 @@
 
 	<ItemGroup>
 		<Compile Include="Protocol.fs" />
+		<Compile Include="ProjectContextsHandlerTests.fs" />
 		<Compile Include="Program.fs" />
 	</ItemGroup>
 
@@ -38,7 +39,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.VisualStudio.LanguageServer.Protocol" Version="17.13.6-preview" />
+		<PackageReference Include="Microsoft.VisualStudio.LanguageServer.Protocol" Version="17.13.9" />
+		<PackageReference Include="Microsoft.VisualStudio.LanguageServer.Protocol.Extensions" Version="17.13.9" />
 	</ItemGroup>
 
 	<ItemGroup>
