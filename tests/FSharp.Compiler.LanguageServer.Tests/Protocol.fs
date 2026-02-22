@@ -112,6 +112,11 @@ let openAndPullDiagnostics (client: TestRpcClient) (fileUri: Uri) (content: stri
         return report.Items
     }
 
+let pullProjectContexts (client: TestRpcClient) (fileUri: Uri) =
+    client.JsonRpc.InvokeAsync<VSProjectContextList>(
+        "textDocument/_vs_getProjectContexts",
+        VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileUri)))
+
 [<Fact>]
 let ``The server can process the initialization message`` () =
     task {
