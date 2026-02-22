@@ -112,36 +112,19 @@ internal class VsDiagnosticsHandler
             return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
         }
 
-        var projectSnapshotOpt = context.Workspace.Query.GetProjectSnapshotForFile(uri);
-        if (FSharpOption<Compiler.CodeAnalysis.ProjectSnapshot.FSharpProjectSnapshot>.get_IsNone(projectSnapshotOpt))
-        {
-            return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
-        }
+        var snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(uri);
 
-        var projectSnapshot = projectSnapshotOpt!.Value;
+        var projectContexts = snapshots.Select(snapshot => new VSProjectContext()
+        {
+            Id = snapshot.Identifier.ToString(),
+            Label = snapshot.Label,
+            Kind = VSProjectKind.FSharp
+        }).ToArray();
 
         return Task.FromResult(new VSProjectContextList()
         {
             DefaultIndex = 0,
-            ProjectContexts = [
-                new () {
-                    Id = projectSnapshot.ProjectId!.Value,
-                    Label = projectSnapshot.Label,
-                    Kind = VSProjectKind.FSharp
-                }
-                //new() {
-                //    Id = "potato",
-                //    Label = "Potato",
-                //    // PR for F# project kind: https://devdiv.visualstudio.com/DevDiv/_git/VSLanguageServerClient/pullrequest/529882
-                //    Kind = VSProjectKind.FSharp
-                //},
-                //new () {
-                //    Id = "potato2",
-                //    Label = "Potato2",
-                //    Kind = VSProjectKind.FSharp
-                //}
-
-            ]
+            ProjectContexts = projectContexts
         });
     }
 }
