@@ -15,7 +15,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Compile Include="ProtocolHelpers.fs" />
 		<Compile Include="Protocol.fs" />
+		<Compile Include="DiagnosticsProtocolTests.fs" />
+		<Compile Include="ProjectContextsProtocolTests.fs" />
 		<Compile Include="ProjectContextsHandlerTests.fs" />
 		<Compile Include="Program.fs" />
 	</ItemGroup>

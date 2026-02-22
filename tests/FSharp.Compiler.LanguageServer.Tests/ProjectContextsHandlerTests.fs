@@ -9,9 +9,14 @@ open FSharp.Test.ProjectGeneration.WorkspaceHelpers
 open FSharp.Compiler.CodeAnalysis.Workspace
 open FSharp.Compiler.CodeAnalysis.ProjectSnapshot
 
-open LanguageServer.Protocol
+open LanguageServer.ProtocolHelpers
 
 #nowarn "57"
+
+let pullProjectContexts (client: TestRpcClient) (fileUri: Uri) =
+    client.JsonRpc.InvokeAsync<VSProjectContextList>(
+        "textDocument/_vs_getProjectContexts",
+        VSGetProjectContextsParams(TextDocument = TextDocumentItem(Uri = fileUri)))
 
 [<Fact>]
 let ``ProjectContexts returns single context for file in one project`` () =
