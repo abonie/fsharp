@@ -8,6 +8,7 @@ open System.Threading
 open System.Threading.Tasks
 
 #nowarn "57"
+#nowarn "3261"
 
 type ProjectContextsHandler() =
     interface IMethodHandler with
@@ -18,22 +19,26 @@ type ProjectContextsHandler() =
         member _.HandleRequestAsync
             (request: VSGetProjectContextsParams, context: FSharpRequestContext, _cancellationToken: CancellationToken)
             =
-            let uri = request.TextDocument.Uri
+            let empty = VSProjectContextList(ProjectContexts = [||], DefaultIndex = 0)
 
-            let snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(uri)
+            match request.TextDocument with
+            | null
+            | textDoc when isNull textDoc.Uri -> Task.FromResult(empty)
+            | textDoc ->
+                let snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(textDoc.Uri)
 
-            let projectContexts =
-                snapshots
-                |> Array.map (fun snapshot ->
-                    VSProjectContext(
-                        Label = snapshot.Label,
-                        Id = (snapshot.Identifier.ToString()),
-                        Kind = VSProjectKind.FSharp
-                    ))
+                let projectContexts =
+                    snapshots
+                    |> Array.map (fun snapshot ->
+                        VSProjectContext(
+                            Label = snapshot.Label,
+                            Id = (snapshot.Identifier.ToString()),
+                            Kind = VSProjectKind.FSharp
+                        ))
 
-            Task.FromResult(
-                VSProjectContextList(
-                    ProjectContexts = projectContexts,
-                    DefaultIndex = 0
+                Task.FromResult(
+                    VSProjectContextList(
+                        ProjectContexts = projectContexts,
+                        DefaultIndex = 0
+                    )
                 )
-            )
