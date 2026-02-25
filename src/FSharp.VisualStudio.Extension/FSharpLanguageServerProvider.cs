@@ -112,19 +112,24 @@ internal class VsDiagnosticsHandler
             return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
         }
 
-        var snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(uri);
-
-        var projectContexts = snapshots.Select(snapshot => new VSProjectContext()
+        var projectSnapshotOpt = context.Workspace.Query.GetProjectSnapshotForFile(uri);
+        if (FSharpOption<Compiler.CodeAnalysis.ProjectSnapshot.FSharpProjectSnapshot>.get_IsNone(projectSnapshotOpt))
         {
-            Id = snapshot.Identifier.ToString(),
-            Label = snapshot.Label,
-            Kind = VSProjectKind.FSharp
-        }).ToArray();
+            return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
+        }
+
+        var projectSnapshot = projectSnapshotOpt!.Value;
 
         return Task.FromResult(new VSProjectContextList()
         {
             DefaultIndex = 0,
-            ProjectContexts = projectContexts
+            ProjectContexts = [
+                new () {
+                    Id = projectSnapshot.ProjectId!.Value,
+                    Label = projectSnapshot.Label,
+                    Kind = VSProjectKind.FSharp
+                }
+            ]
         });
     }
 }
