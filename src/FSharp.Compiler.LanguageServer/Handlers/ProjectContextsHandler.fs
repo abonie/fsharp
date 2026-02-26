@@ -22,7 +22,7 @@ type ProjectContextsHandler() =
             let empty = VSProjectContextList(ProjectContexts = [||], DefaultIndex = 0)
 
             match request.TextDocument with
-            | null
+            | null -> Task.FromResult(empty)
             | textDoc when isNull textDoc.Uri -> Task.FromResult(empty)
             | textDoc ->
                 let snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(textDoc.Uri)
