@@ -62,6 +62,22 @@ type FSharpDiagnosticExtensions =
             Code = SumType<int, _> this.ErrorNumberText
         )
 
+    [<Extension>]
+    static member ToVsDiagnostic(this: FSharpDiagnostic, projects: VSDiagnosticProjectInformation[]) =
+        let severity =
+            match this.Severity with
+            | FSharpDiagnosticSeverity.Error -> DiagnosticSeverity.Error
+            | FSharpDiagnosticSeverity.Warning -> DiagnosticSeverity.Warning
+            | FSharpDiagnosticSeverity.Info -> DiagnosticSeverity.Information
+            | FSharpDiagnosticSeverity.Hidden -> DiagnosticSeverity.Hint
+        VSDiagnostic(
+            Range = this.Range.ToLspRange(),
+            Severity = severity,
+            Message = $"LSP: {this.Message}",
+            Code = SumType<int, _> this.ErrorNumberText,
+            Projects = projects
+        )
+
 module Activity =
     let listen (filter) logMsg =
         let indent (activity: Activity) =

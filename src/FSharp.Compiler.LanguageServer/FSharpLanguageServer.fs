@@ -2,6 +2,7 @@ namespace FSharp.Compiler.LanguageServer
 
 open System
 open System.Diagnostics
+open System.IO
 open System.Runtime.CompilerServices
 
 open FSharp.Compiler.LanguageServer.Common
@@ -104,9 +105,18 @@ type FSharpLanguageServer
 
         let jsonRpc = new JsonRpc(messageHandler)
 
-        let listener = new TextWriterTraceListener(Console.Out)
+        // Console logging
+        let consoleListener = new TextWriterTraceListener(Console.Out)
+        jsonRpc.TraceSource.Listeners.Add(consoleListener) |> ignore
 
-        jsonRpc.TraceSource.Listeners.Add(listener) |> ignore
+        // File logging
+        let logDir = @"Q:\lsplogs"
+        if not (Directory.Exists(logDir)) then
+            Directory.CreateDirectory(logDir) |> ignore
+
+        let logFileName = Path.Combine(logDir, $"{Guid.NewGuid()}.log")
+        let fileListener = new TextWriterTraceListener(logFileName)
+        jsonRpc.TraceSource.Listeners.Add(fileListener) |> ignore
 
         jsonRpc.TraceSource.Switch.Level <- SourceLevels.All
 

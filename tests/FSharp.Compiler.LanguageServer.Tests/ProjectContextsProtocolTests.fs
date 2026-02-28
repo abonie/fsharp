@@ -5,10 +5,38 @@ open Xunit
 
 open Microsoft.VisualStudio.LanguageServer.Protocol
 open FSharp.Test.ProjectGeneration.WorkspaceHelpers
+open FSharp.Compiler.CodeAnalysis.ProjectSnapshot
 
 open LanguageServer.ProtocolHelpers
 
 #nowarn "57"
+
+[<Fact>]
+let ``GetProjectContexts response format matches VS expectations`` () =
+    task {
+        let! client = initializeLanguageServer None
+        let projectName = "TestProject"
+        let fileOnDisk = sourceFileOnDisk cleanCode
+        client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = projectName), [ fileOnDisk.LocalPath ]) |> ignore
+        do! openDocument client fileOnDisk cleanCode 1
+
+        let! result = getProjectContexts client fileOnDisk
+        Assert.NotNull(result)
+        Assert.Equal(1, result.ProjectContexts.Length)
+        Assert.Equal(0, result.DefaultIndex)
+
+        let ctx = result.ProjectContexts[0]
+        // Label should be just the project name without path or extension, matching Roslyn's project.Name format
+        Assert.Equal(projectName, ctx.Label)
+        // Kind should be FSharp
+        Assert.Equal(VSProjectKind.FSharp, ctx.Kind)
+        // Id should follow Roslyn's format: "<guid>|<debugName>"
+        Assert.False(String.IsNullOrWhiteSpace(ctx.Id), "Project context Id should not be empty")
+        Assert.Contains("|", ctx.Id)
+        let parts = ctx.Id.Split('|', 2)
+        Assert.True(Guid.TryParse(parts[0]) |> fst, $"First part of Id should be a valid GUID, got: '{parts[0]}'")
+        Assert.False(String.IsNullOrWhiteSpace(parts[1]), "Second part of Id (debug name) should not be empty")
+    }
 
 [<Fact>]
 let ``GetProjectContexts returns single project for file in one project`` () =
@@ -37,16 +65,18 @@ let ``GetProjectContexts returns FSharp project kind`` () =
     }
 
 [<Fact>]
-let ``GetProjectContexts returns project label containing project file name`` () =
+let ``GetProjectContexts returns project label as project name without extension`` () =
     task {
         let! client = initializeLanguageServer None
-        let fileOnDisk = setupSingleFileProject client cleanCode
+        let projectName = "MyProject"
+        let fileOnDisk = sourceFileOnDisk cleanCode
+        client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = projectName), [ fileOnDisk.LocalPath ]) |> ignore
         do! openDocument client fileOnDisk cleanCode 1
 
         let! result = getProjectContexts client fileOnDisk
         let ctx = result.ProjectContexts[0]
         Assert.False(String.IsNullOrWhiteSpace(ctx.Label), "Project context should have a non-empty label")
-        Assert.EndsWith(".fsproj", ctx.Label)
+        Assert.Equal(projectName, ctx.Label)
     }
 
 [<Fact>]

@@ -15,6 +15,7 @@ using FSharp.Compiler.CodeAnalysis.Workspace;
 using FSharp.Compiler.Diagnostics;
 using FSharp.Compiler.LanguageServer;
 using FSharp.Compiler.LanguageServer.Common;
+using FSharp.Compiler.LanguageServer.Handlers;
 
 using Microsoft.CommonLanguageServerProtocol.Framework;
 using Microsoft.Extensions.DependencyInjection;
@@ -92,12 +93,17 @@ internal class VsDiagnosticsHandler
     {
         var report = await context.Workspace.Query.GetDiagnosticsForFile(request!.TextDocument!.Uri).Please(cancellationToken);
 
+        var snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(request.TextDocument.Uri);
+        var projects = snapshots.Select(s => new VSDiagnosticProjectInformation
+        {
+            ProjectName = Path.GetFileNameWithoutExtension(s.ProjectFileName),
+            ProjectIdentifier = ProjectContextsHandler.MakeProjectContextId(s.ProjectFileName, s.ProjectId),
+        }).ToArray();
+
         var vsReport = new VSInternalDiagnosticReport
         {
             ResultId = report.ResultId,
-            //Identifier = 1,
-            //Version = 1,
-            Diagnostics = [.. report.Diagnostics.Select(FSharpDiagnosticExtensions.ToLspDiagnostic)]
+            Diagnostics = [.. report.Diagnostics.Select(d => d.ToVsDiagnostic(projects))]
         };
 
         return [vsReport];
