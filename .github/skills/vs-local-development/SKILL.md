@@ -46,6 +46,32 @@ Use the deploy script to install the VSIX, wait for the installer to finish, and
 This script:
 - Installs the VSIX into the experimental hive (`/rootSuffix:exp`)
 
+**Shell requirement:** `VSIXInstaller.exe` and `devenv.exe` must be on `PATH`. Run from a **Visual Studio Developer PowerShell** / **Developer Command Prompt**, or use the discovery snippet below.
+
+### Finding devenv.exe
+
+VS installation folders use **numeric version identifiers** (e.g., `18`), not marketing years (e.g., `2026`), and may be under `Program Files` or `Program Files (x86)`. Editions vary (`IntPreview`, `Enterprise`, `Preview`, `Community`, etc.).
+
+Use this snippet to find `devenv.exe` dynamically:
+
+```powershell
+$devenv = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio" `
+    -Filter "devenv.exe" -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match 'Common7\\IDE\\devenv\.exe$' } |
+    Select-Object -First 1 -ExpandProperty FullName
+
+if (-not $devenv) { Write-Error "devenv.exe not found"; exit 1 }
+Write-Host "Using: $devenv"
+```
+
+Then source the Developer environment and deploy:
+
+```powershell
+$vsDir = Split-Path (Split-Path (Split-Path $devenv))   # …\Common7\IDE → VS root
+& "$vsDir\Common7\Tools\VsDevCmd.bat"
+.github/skills/vs-local-development/scripts/deploy-to-vs.ps1 "artifacts\VSSetup\Debug\VisualFSharpDebug.vsix"
+```
+
 ### 4. Reopen VS
 
 The extension is now installed. Open the experimental instance normally:
@@ -85,6 +111,7 @@ Visual Studio supports **experimental instances** (`/rootsuffix exp`) — isolat
 | VSIX install fails | Ensure all experimental VS instances are closed (`.github/skills/vs-local-development/scripts/close-exp-instances.ps1`) |
 | Extension not appearing in VS | Re-run `deploy-to-vs.ps1` or manually run `devenv /rootsuffix exp /clearcache` and `/updateconfiguration` |
 | Old version still loaded | Delete `artifacts/` and rebuild |
+| `devenv.exe` not found | VS folders use numeric versions (e.g., `18`), not years. Use the discovery snippet in the Deploy section above |
 
 ## When to Use This Skill
 
