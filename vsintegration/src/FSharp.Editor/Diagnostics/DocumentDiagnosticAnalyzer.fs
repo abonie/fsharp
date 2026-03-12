@@ -32,22 +32,22 @@ type internal FSharpDocumentDiagnosticAnalyzer
         [<Import(typeof<SVsServiceProvider>)>] serviceProvider: IServiceProvider
     ) =
 
-    //let settingsReader : Microsoft.VisualStudio.Utilities.UnifiedSettings.ISettingsReader =
     let produceDiagnostic =
-        let settingsManager = serviceProvider.GetService(typeof<SVsUnifiedSettingsManager>) :?> Microsoft.VisualStudio.Utilities.UnifiedSettings.ISettingsManager
-        let reader = settingsManager.GetReader()
-        let settingValue = reader.GetValueOrThrow<string>("fsharp.getDiagnosticsFrom")
+        let settingValue =
+            try
+                let settingsManager = serviceProvider.GetService(typeof<SVsUnifiedSettingsManager>) :?> Microsoft.VisualStudio.Utilities.UnifiedSettings.ISettingsManager
+                let reader = settingsManager.GetReader()
+                reader.GetValueOrThrow<string>("fsharp.getDiagnosticsFrom")
+            with _ -> "both"
         match settingValue with
         | "both"
         | "old" -> true
         | "unset"
         | "lsp" -> false
-        | _ -> failwithf "Unexpected value for 'fsharp.getDiagnosticsFrom': %s" settingValue
+        | _ -> true
 
 
     let shouldProduceDiagnostics (_document: Document) =
-        //let value = settingsReader.GetValueOrThrow<string>("fsharp.getDiagnosticsFrom")
-        // TODO XXX cast it to enum?
         produceDiagnostic
 
 

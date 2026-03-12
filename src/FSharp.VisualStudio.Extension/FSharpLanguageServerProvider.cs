@@ -15,7 +15,6 @@ using FSharp.Compiler.CodeAnalysis.Workspace;
 using FSharp.Compiler.Diagnostics;
 using FSharp.Compiler.LanguageServer;
 using FSharp.Compiler.LanguageServer.Common;
-using FSharp.Compiler.LanguageServer.Handlers;
 
 using Microsoft.CommonLanguageServerProtocol.Framework;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +49,13 @@ internal class VsServerCapabilitiesOverride : IServerCapabilitiesOverride
             TextDocumentSync = value.TextDocumentSync,
             SupportsDiagnosticRequests = config.EnabledFeatures.Diagnostics,
             ProjectContextProvider = true,
+            CodeActionProvider = config.EnabledFeatures.CodeActions
+                ? new CodeActionOptions
+                {
+                    CodeActionKinds = [CodeActionKind.QuickFix],
+                    ResolveProvider = false,
+                }
+                : null,
             DiagnosticProvider =
                 config.EnabledFeatures.Diagnostics ?
 
@@ -83,8 +89,7 @@ internal class VsServerCapabilitiesOverride : IServerCapabilitiesOverride
 }
 
 internal class VsDiagnosticsHandler
-    : IRequestHandler<VSInternalDiagnosticParams, VSInternalDiagnosticReport[], FSharpRequestContext>,
-      IRequestHandler<VSGetProjectContextsParams, VSProjectContextList, FSharpRequestContext>
+    : IRequestHandler<VSInternalDiagnosticParams, VSInternalDiagnosticReport[], FSharpRequestContext>
 {
     public bool MutatesSolutionState => false;
 
@@ -94,11 +99,7 @@ internal class VsDiagnosticsHandler
         var report = await context.Workspace.Query.GetDiagnosticsForFile(request!.TextDocument!.Uri).Please(cancellationToken);
 
         var snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(request.TextDocument.Uri);
-        var projects = snapshots.Select(s => new VSDiagnosticProjectInformation
-        {
-            ProjectName = Path.GetFileNameWithoutExtension(s.ProjectFileName),
-            ProjectIdentifier = ProjectContextsHandler.MakeProjectContextId(s.ProjectFileName, s.ProjectId),
-        }).ToArray();
+        var projects = Utils.snapshotsToProjectInfos(snapshots);
 
         var vsReport = new VSInternalDiagnosticReport
         {
@@ -109,35 +110,6 @@ internal class VsDiagnosticsHandler
         return [vsReport];
     }
 
-    [LanguageServerEndpoint("textDocument/_vs_getProjectContexts", LanguageServerConstants.DefaultLanguageName)]
-    public Task<VSProjectContextList> HandleRequestAsync(VSGetProjectContextsParams request, FSharpRequestContext context, CancellationToken cancellationToken)
-    {
-        var uri = request?.TextDocument?.Uri;
-        if (uri is null)
-        {
-            return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
-        }
-
-        var projectSnapshotOpt = context.Workspace.Query.GetProjectSnapshotForFile(uri);
-        if (FSharpOption<Compiler.CodeAnalysis.ProjectSnapshot.FSharpProjectSnapshot>.get_IsNone(projectSnapshotOpt))
-        {
-            return Task.FromResult(new VSProjectContextList() { ProjectContexts = [] });
-        }
-
-        var projectSnapshot = projectSnapshotOpt!.Value;
-
-        return Task.FromResult(new VSProjectContextList()
-        {
-            DefaultIndex = 0,
-            ProjectContexts = [
-                new () {
-                    Id = projectSnapshot.ProjectId!.Value,
-                    Label = projectSnapshot.Label,
-                    Kind = VSProjectKind.FSharp
-                }
-            ]
-        });
-    }
 }
 
 
@@ -290,7 +262,8 @@ internal class FSharpLanguageServerProvider : LanguageServerProvider
 
         var serverConfig = new FSharpLanguageServerConfig(
             new FSharpLanguageServerFeatures(
-                diagnostics: enabled.Contains(settingsReadResult.ValueOrDefault(FSharpExtensionSettings.GetDiagnosticsFrom, defaultValue: FSharpExtensionSettings.BOTH))
+                diagnostics: enabled.Contains(settingsReadResult.ValueOrDefault(FSharpExtensionSettings.GetDiagnosticsFrom, defaultValue: FSharpExtensionSettings.BOTH)),
+                codeActions: true
                 ));
 
         var disposeToEndSubscription =

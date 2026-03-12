@@ -31,7 +31,19 @@ type CapabilitiesManager(config: FSharpLanguageServerConfig, scOverrides: IServe
                         InterFileDependencies = true,
                         Identifier = "potato",
                         WorkspaceDiagnostics = true
-                    ))
+                    )),
+            CodeActionProvider =
+                (if config.EnabledFeatures.CodeActions then
+                     System.Nullable(
+                         SumType<bool, CodeActionOptions>(
+                             CodeActionOptions(
+                                 CodeActionKinds = [| CodeActionKind.QuickFix |],
+                                 ResolveProvider = false
+                             )
+                         )
+                     )
+                 else
+                     System.Nullable())
             //CompletionProvider = CompletionOptions(TriggerCharacters = [| "."; " " |], ResolveProvider = true, WorkDoneProgress = true),
             //HoverProvider = SumType<bool, HoverOptions>(HoverOptions(WorkDoneProgress = true))
         )

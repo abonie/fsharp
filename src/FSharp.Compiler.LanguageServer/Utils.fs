@@ -3,15 +3,40 @@ namespace FSharp.Compiler.LanguageServer
 open Microsoft.CommonLanguageServerProtocol.Framework
 open Microsoft.VisualStudio.LanguageServer.Protocol
 
+open System
 open System.Diagnostics
+open System.Security.Cryptography
+open System.Text
 
+open FSharp.Compiler.CodeAnalysis.ProjectSnapshot
 open FSharp.Compiler.Diagnostics
 open System.Runtime.CompilerServices
+
+#nowarn "57"
 
 [<AutoOpen>]
 module Utils =
 
     type LspRange = Microsoft.VisualStudio.LanguageServer.Protocol.Range
+
+    let makeProjectContextId (projectFileName: string, projectId: string option) =
+        let guid =
+            match projectId with
+            | Some id ->
+                match Guid.TryParse(id) with
+                | true, g -> g
+                | _ -> Guid(MD5.HashData(Encoding.UTF8.GetBytes(projectFileName)))
+            | None -> Guid(MD5.HashData(Encoding.UTF8.GetBytes(projectFileName)))
+
+        $"{guid}|{projectFileName}"
+
+    let snapshotsToProjectInfos (snapshots: FSharpProjectSnapshot array) =
+        snapshots
+        |> Array.map (fun s ->
+            VSDiagnosticProjectInformation(
+                ProjectName = IO.Path.GetFileNameWithoutExtension(s.ProjectFileName),
+                ProjectIdentifier = makeProjectContextId(s.ProjectFileName, s.ProjectId)
+            ))
 
     let LspLogger (output: string -> unit) =
         { new ILspLogger with
@@ -46,23 +71,6 @@ module Utils =
 type FSharpDiagnosticExtensions =
 
     [<Extension>]
-    static member ToLspDiagnostic(this: FSharpDiagnostic) =
-        let severity =
-            match this.Severity with
-            | FSharpDiagnosticSeverity.Error -> DiagnosticSeverity.Error
-            | FSharpDiagnosticSeverity.Warning -> DiagnosticSeverity.Warning
-            | FSharpDiagnosticSeverity.Info -> DiagnosticSeverity.Information
-            // TODO consider not emitting this diagnostic if severity is Hidden
-            | FSharpDiagnosticSeverity.Hidden -> DiagnosticSeverity.Hint
-        Diagnostic(
-            Range = this.Range.ToLspRange(),
-            Severity = severity,
-            Message = $"LSP: {this.Message}",
-            //Source = "Intellisense",
-            Code = SumType<int, _> this.ErrorNumberText
-        )
-
-    [<Extension>]
     static member ToVsDiagnostic(this: FSharpDiagnostic, projects: VSDiagnosticProjectInformation[]) =
         let severity =
             match this.Severity with
@@ -75,7 +83,8 @@ type FSharpDiagnosticExtensions =
             Severity = severity,
             Message = $"LSP: {this.Message}",
             Code = SumType<int, _> this.ErrorNumberText,
-            Projects = projects
+            Projects = projects,
+            Identifier = string (hash (this.ErrorNumberText, this.Range, this.Message))
         )
 
 module Activity =

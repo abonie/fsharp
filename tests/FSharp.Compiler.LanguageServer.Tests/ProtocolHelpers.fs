@@ -35,6 +35,7 @@ let createLanguageServer (workspace: FSharpWorkspace) (config: FSharpLanguageSer
         | None -> FSharpLanguageServer.Create(workspace)
 
     let formatter = new JsonMessageFormatter()
+    VSExtensionUtilities.AddVSExtensionConverters(formatter.JsonSerializer)
 
     let messageHandler =
         new HeaderDelimitedMessageHandler(inputStream, outputStream, formatter)
@@ -95,9 +96,7 @@ let pullDiagnosticResponse (client: TestRpcClient) (fileUri: Uri) =
 let pullDiagnostics (client: TestRpcClient) (fileUri: Uri) =
     task {
         let! response = pullDiagnosticResponse client fileUri
-        let docs = response.First.RelatedDocuments
-        Assert.True(docs.ContainsKey(fileUri), $"RelatedDocuments missing entry for {fileUri}")
-        return docs[fileUri].First
+        return response.First
     }
 
 let setupSingleFileProject (client: TestRpcClient) (content: string) =
@@ -112,6 +111,37 @@ let openAndPullDiagnostics (client: TestRpcClient) (fileUri: Uri) (content: stri
         return report.Items
     }
 
+let pullVsDiagnosticsRaw(client: TestRpcClient) (fileUri: Uri) =
+    client.JsonRpc.InvokeWithParameterObjectAsync<Newtonsoft.Json.Linq.JToken>(
+        Methods.TextDocumentDiagnosticName,
+        DocumentDiagnosticParams(TextDocument = TextDocumentIdentifier(Uri = fileUri)))
+
+let openAndPullVsDiagnosticsRaw (client: TestRpcClient) (fileUri: Uri) (content: string) =
+    task {
+        do! openDocument client fileUri content 1
+        return! pullVsDiagnosticsRaw client fileUri
+    }
+
+let getVsDiagnosticItems (response: Newtonsoft.Json.Linq.JToken) =
+    let items = response["items"]
+    Assert.True(items <> null, "Expected 'items' property in diagnostic response")
+    items :?> Newtonsoft.Json.Linq.JArray
+
+let getVsProjects (diagnosticItem: Newtonsoft.Json.Linq.JToken) =
+    let projects = diagnosticItem["_vs_projects"]
+    Assert.True(projects <> null, "Expected '_vs_projects' property in VS diagnostic")
+    projects :?> Newtonsoft.Json.Linq.JArray
+
+let getVsProjectName (project: Newtonsoft.Json.Linq.JToken) =
+    let name = project["_vs_projectName"]
+    Assert.True(name <> null, "Expected '_vs_projectName' property in project info")
+    name.ToString()
+
+let getVsProjectIdentifier (project: Newtonsoft.Json.Linq.JToken) =
+    let id = project["_vs_projectIdentifier"]
+    Assert.True(id <> null, "Expected '_vs_projectIdentifier' property in project info")
+    id.ToString()
+
 let getProjectContexts (client: TestRpcClient) (fileUri: Uri) =
     client.JsonRpc.InvokeAsync<VSProjectContextList>(
         "textDocument/_vs_getProjectContexts",
@@ -125,3 +155,20 @@ let setupMultiProjectFile (client: TestRpcClient) (content: string) (projectName
     for name in projectNames do
         client.Workspace.Projects.AddOrUpdate(ProjectConfig.Empty(name = name), [ fileOnDisk.LocalPath ]) |> ignore
     fileOnDisk
+
+let requestCodeActions (client: TestRpcClient) (fileUri: Uri) (line: int) =
+    let range = Range(Start = Position(Line = line, Character = 0), End = Position(Line = line, Character = 999))
+    client.JsonRpc.InvokeAsync<CodeAction array>(
+        Methods.TextDocumentCodeActionName,
+        CodeActionParams(
+            TextDocument = TextDocumentIdentifier(Uri = fileUri),
+            Range = range,
+            Context = CodeActionContext(Diagnostics = [||])))
+
+let openAndRequestCodeActions (client: TestRpcClient) (fileUri: Uri) (content: string) (line: int) =
+    task {
+        do! openDocument client fileUri content 1
+        // Pull diagnostics first so the server has them cached
+        let! _diags = pullDiagnostics client fileUri
+        return! requestCodeActions client fileUri line
+    }

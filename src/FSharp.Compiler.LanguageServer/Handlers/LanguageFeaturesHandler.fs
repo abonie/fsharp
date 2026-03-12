@@ -1,4 +1,4 @@
-﻿namespace FSharp.Compiler.LanguageServer.Handlers
+namespace FSharp.Compiler.LanguageServer.Handlers
 
 open Microsoft.CommonLanguageServerProtocol.Framework
 open Microsoft.VisualStudio.LanguageServer.Protocol
@@ -7,8 +7,6 @@ open FSharp.Compiler.LanguageServer.Common
 open FSharp.Compiler.LanguageServer
 open System.Threading.Tasks
 open System.Threading
-open System.Collections.Generic
-open Microsoft.VisualStudio.FSharp.Editor
 
 #nowarn "57"
 
@@ -29,22 +27,15 @@ type LanguageFeaturesHandler() =
 
                 let! fsharpDiagnosticReport = context.Workspace.Query.GetDiagnosticsForFile request.TextDocument.Uri
 
-                let report =
-                    FullDocumentDiagnosticReport(
-                        Items = (fsharpDiagnosticReport.Diagnostics |> Array.map (_.ToLspDiagnostic())),
-                        ResultId = fsharpDiagnosticReport.ResultId
-                    )
-
-                let relatedDocuments = Dictionary()
-
-                relatedDocuments.Add(
-                    request.TextDocument.Uri,
-                    SumType<FullDocumentDiagnosticReport, UnchangedDocumentDiagnosticReport> report
-                )
+                let snapshots = context.Workspace.Query.GetProjectSnapshotsForFile(request.TextDocument.Uri)
+                let projects = snapshotsToProjectInfos snapshots
 
                 return
                     SumType<RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport>(
-                        RelatedFullDocumentDiagnosticReport(RelatedDocuments = relatedDocuments)
+                        RelatedFullDocumentDiagnosticReport(
+                            Items = (fsharpDiagnosticReport.Diagnostics |> Array.map (_.ToVsDiagnostic(projects))),
+                            ResultId = fsharpDiagnosticReport.ResultId
+                        )
                     )
             }
             |> CancellableTask.start cancellationToken

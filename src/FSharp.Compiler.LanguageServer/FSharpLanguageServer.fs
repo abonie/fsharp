@@ -2,7 +2,6 @@ namespace FSharp.Compiler.LanguageServer
 
 open System
 open System.Diagnostics
-open System.IO
 open System.Runtime.CompilerServices
 
 open FSharp.Compiler.LanguageServer.Common
@@ -24,6 +23,11 @@ module Stuff =
     [<Literal>]
     let FSharpLanguageName = "F#"
 
+    let createConfiguredSerializer () =
+        let s = Newtonsoft.Json.JsonSerializer.CreateDefault()
+        VSExtensionUtilities.AddVSExtensionConverters(s)
+        s
+
 [<Extension>]
 type Extensions =
 
@@ -41,7 +45,7 @@ type FSharpLanguageServer
     ) =
 
     // TODO: Switch to SystemTextJsonLanguageServer
-    inherit NewtonsoftLanguageServer<FSharpRequestContext>(jsonRpc, Newtonsoft.Json.JsonSerializer.CreateDefault(), logger)
+    inherit NewtonsoftLanguageServer<FSharpRequestContext>(jsonRpc, createConfiguredSerializer (), logger)
 
     let config = defaultArg config FSharpLanguageServerConfig.Default
     let initialWorkspace = defaultArg initialWorkspace (FSharpWorkspace())
@@ -64,6 +68,7 @@ type FSharpLanguageServer
                 .AddSingleton<IMethodHandler, InitializedHandler<InitializedParams, FSharpRequestContext>>()
                 .AddSingleton<IMethodHandler, DocumentStateHandler>()
                 .AddSingleton<IMethodHandler, LanguageFeaturesHandler>()
+                .AddSingleton<IMethodHandler, CodeActionHandler>()
                 .AddSingleton<IMethodHandler, ProjectContextsHandler>()
                 .AddSingleton<ILspLogger>(logger)
                 .AddSingleton<AbstractRequestContextFactory<FSharpRequestContext>, FShapRequestContextFactory>()
@@ -99,24 +104,15 @@ type FSharpLanguageServer
 
         // TODO: handle disposal of these
         let formatter = new JsonMessageFormatter()
+        VSExtensionUtilities.AddVSExtensionConverters(formatter.JsonSerializer)
 
         let messageHandler =
             new HeaderDelimitedMessageHandler(serverStream, serverStream, formatter)
 
         let jsonRpc = new JsonRpc(messageHandler)
 
-        // Console logging
         let consoleListener = new TextWriterTraceListener(Console.Out)
         jsonRpc.TraceSource.Listeners.Add(consoleListener) |> ignore
-
-        // File logging
-        let logDir = @"Q:\lsplogs"
-        if not (Directory.Exists(logDir)) then
-            Directory.CreateDirectory(logDir) |> ignore
-
-        let logFileName = Path.Combine(logDir, $"{Guid.NewGuid()}.log")
-        let fileListener = new TextWriterTraceListener(logFileName)
-        jsonRpc.TraceSource.Listeners.Add(fileListener) |> ignore
 
         jsonRpc.TraceSource.Switch.Level <- SourceLevels.All
 

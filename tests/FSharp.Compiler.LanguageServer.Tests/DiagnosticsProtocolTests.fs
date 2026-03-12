@@ -165,16 +165,14 @@ let ``Diagnostics for file not in any project`` () =
         do! openDocument client fileOnDisk cleanCode 1
         let! response = pullDiagnosticResponse client fileOnDisk
         let report = response.First
-        Assert.NotNull(report.RelatedDocuments)
         Assert.NotNull(report.Items)
         Assert.Equal(0, report.Items.Length)
-        Assert.True(report.RelatedDocuments.ContainsKey(fileOnDisk), "RelatedDocuments should contain the requested file even when it is not in a project")
     }
 
 [<Fact>]
 let ``Server with diagnostics disabled does not advertise diagnostic capabilities`` () =
     task {
-        let config = { FSharpLanguageServerConfig.Default with EnabledFeatures = { Diagnostics = false } }
+        let config = { FSharpLanguageServerConfig.Default with EnabledFeatures = { Diagnostics = false; CodeActions = false } }
         let! client = createLanguageServer (FSharpWorkspace()) (Some config)
         Assert.Null(client.Capabilities.DiagnosticOptions)
     }
@@ -196,27 +194,16 @@ let ``Diagnostics for specific file in multi-file project`` () =
     }
 
 [<Fact>]
-let ``Diagnostic report contains a ResultId`` () =
-    task {
-        let! client = initializeLanguageServer None
-        let fileOnDisk = setupSingleFileProject client cleanCode
-        do! openDocument client fileOnDisk cleanCode 1
-        let! report = pullDiagnostics client fileOnDisk
-        Assert.NotNull(report.ResultId)
-        Assert.False(String.IsNullOrWhiteSpace(report.ResultId))
-    }
-
-[<Fact>]
-let ``Diagnostic response uses RelatedDocuments with file URI as key`` () =
+let ``Diagnostic response has Items and a valid ResultId`` () =
     task {
         let! client = initializeLanguageServer None
         let fileOnDisk = setupSingleFileProject client cleanCode
         do! openDocument client fileOnDisk cleanCode 1
         let! response = pullDiagnosticResponse client fileOnDisk
-        let relatedDocs = response.First.RelatedDocuments
-        Assert.NotNull(relatedDocs)
-        Assert.True(relatedDocs.Count > 0, "RelatedDocuments should contain at least one entry")
-        Assert.True(relatedDocs.ContainsKey(fileOnDisk), "RelatedDocuments should have entry for requested file")
+        let report = response.First
+        Assert.NotNull(report.Items)
+        Assert.NotNull(report.ResultId)
+        Assert.False(String.IsNullOrWhiteSpace(report.ResultId), "ResultId should not be empty")
     }
 
 [<Fact>]
@@ -275,4 +262,84 @@ let ``ResultId changes when diagnostics change`` () =
         let! report2 = pullDiagnostics client fileOnDisk
         Assert.False(String.IsNullOrWhiteSpace(report2.ResultId), "Second ResultId should not be empty")
         Assert.NotEqual<string>(report1.ResultId, report2.ResultId)
+    }
+
+[<Fact>]
+let ``Diagnostics include project information`` () =
+    task {
+        let! client = initializeLanguageServer None
+        let projectName = "MyTestProject"
+        let fileOnDisk = setupMultiProjectFile client notMutableCode [ projectName ]
+        let! response = openAndPullVsDiagnosticsRaw client fileOnDisk notMutableCode
+        let items = getVsDiagnosticItems response
+        Assert.True(items.Count > 0, "Expected at least one diagnostic")
+        for item in items do
+            let projects = getVsProjects item
+            Assert.NotNull(projects)
+            Assert.True(projects.Count > 0, "Expected at least one project in _vs_projects")
+            let projName = getVsProjectName projects[0]
+            Assert.Equal(projectName, projName)
+    }
+
+[<Fact>]
+let ``Diagnostics project identifier matches project context id format`` () =
+    task {
+        let! client = initializeLanguageServer None
+        let projectName = "IdentifierProject"
+        let fileOnDisk = setupMultiProjectFile client notMutableCode [ projectName ]
+        let! response = openAndPullVsDiagnosticsRaw client fileOnDisk notMutableCode
+        let items = getVsDiagnosticItems response
+        Assert.True(items.Count > 0, "Expected at least one diagnostic")
+        let! contexts = getProjectContexts client fileOnDisk
+        Assert.True(contexts.ProjectContexts.Length > 0, "Expected at least one project context")
+
+        let contextId = contexts.ProjectContexts[0].Id
+        let firstItem = items[0]
+        let vsProjects = getVsProjects firstItem
+        let diagProjectId = getVsProjectIdentifier vsProjects[0]
+        Assert.Equal(contextId, diagProjectId)
+    }
+
+[<Fact>]
+let ``Diagnostics for file in multiple projects include all project names`` () =
+    task {
+        let! client = initializeLanguageServer None
+        let content = "module Shared\nlet x: int = \"hello\""
+        let fileOnDisk = setupMultiProjectFile client content [ "ProjectAlpha"; "ProjectBeta" ]
+        let! response = openAndPullVsDiagnosticsRaw client fileOnDisk content
+        let items = getVsDiagnosticItems response
+        Assert.True(items.Count > 0, "Expected at least one diagnostic")
+        let firstItem = items[0]
+        let vsProjects = getVsProjects firstItem
+        let projNames = [| for p in vsProjects -> getVsProjectName p |] |> Array.sort
+        Assert.Equal(2, projNames.Length)
+        Assert.Equal("ProjectAlpha", projNames[0])
+        Assert.Equal("ProjectBeta", projNames[1])
+    }
+
+[<Fact>]
+let ``VS diagnostics for file not in any project return empty items`` () =
+    task {
+        let! client = initializeLanguageServer None
+        let fileOnDisk = sourceFileOnDisk notMutableCode
+        let! response = openAndPullVsDiagnosticsRaw client fileOnDisk notMutableCode
+        let items = getVsDiagnosticItems response
+        Assert.Equal(0, items.Count)
+    }
+
+[<Fact>]
+let ``Typed deserialization produces VSDiagnostic instances with project info`` () =
+    task {
+        let! client = initializeLanguageServer None
+        let projectName = "TypedDeserProject"
+        let fileOnDisk = setupMultiProjectFile client notMutableCode [ projectName ]
+        do! openDocument client fileOnDisk notMutableCode 1
+        let! response = pullDiagnosticResponse client fileOnDisk
+        let report = response.First
+        Assert.True(report.Items.Length > 0, "Expected at least one diagnostic")
+        for diag in report.Items do
+            let vsDiag = Assert.IsType<VSDiagnostic>(diag)
+            Assert.NotNull(vsDiag.Projects)
+            Assert.True(vsDiag.Projects.Length > 0, "VSDiagnostic should have project information")
+            Assert.Equal(projectName, vsDiag.Projects[0].ProjectName)
     }

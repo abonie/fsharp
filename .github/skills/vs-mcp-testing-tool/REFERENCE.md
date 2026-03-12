@@ -134,6 +134,19 @@ vs-get-error-list severity=error
 - Returns each diagnostic in the format `[severity] file(line,column): description`.
 - Returns a summary header with match count and active filter.
 
+## VS Editor
+
+### `vs-inspect-lightbulb`
+
+Inspects whether a light bulb is present at a file/line and returns available code action titles.
+
+```
+vs-inspect-lightbulb filePath="C:\path\to\File.cs" lineNumber=42
+```
+
+- Uses 1-based line numbers.
+- Returns whether the light bulb is present and the list of offered actions.
+
 ## MCP Server Setup
 
 ### Prerequisites
