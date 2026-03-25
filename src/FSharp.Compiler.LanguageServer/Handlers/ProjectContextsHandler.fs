@@ -23,6 +23,7 @@ type ProjectContextsHandler() =
         member _.HandleRequestAsync
             (request: VSGetProjectContextsParams, context: FSharpRequestContext, _cancellationToken: CancellationToken)
             =
+            let telemetry = context.LspServices.GetRequiredService<ILspTelemetry>()
             let empty = VSProjectContextList(ProjectContexts = [||], DefaultIndex = 0)
 
             match request.TextDocument with
@@ -39,6 +40,11 @@ type ProjectContextsHandler() =
                             Id = makeProjectContextId(snapshot.ProjectFileName, snapshot.ProjectId),
                             Kind = VSProjectKind.FSharp
                         ))
+
+                telemetry.ReportEvent(
+                    TelemetryEvents.GetProjectContexts,
+                    [| "project_count", projectContexts.Length :> obj |]
+                )
 
                 Task.FromResult(
                     VSProjectContextList(

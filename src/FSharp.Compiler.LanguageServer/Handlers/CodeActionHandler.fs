@@ -753,6 +753,14 @@ type CodeActionHandler() =
             (request: CodeActionParams, context: FSharpRequestContext, cancellationToken: CancellationToken)
             =
             cancellableTask {
+                let telemetry = context.LspServices.GetRequiredService<ILspTelemetry>()
+
+                use _scope =
+                    telemetry.ReportEventWithDuration(
+                        TelemetryEvents.GetCodeActions,
+                        [| "uri_hash", hash request.TextDocument.Uri :> obj |]
+                    )
+
                 let uri = request.TextDocument.Uri
 
                 let! diagnosticReport = context.Workspace.Query.GetDiagnosticsForFile uri

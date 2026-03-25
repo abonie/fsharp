@@ -71,6 +71,7 @@ type FSharpLanguageServer
                 .AddSingleton<IMethodHandler, CodeActionHandler>()
                 .AddSingleton<IMethodHandler, ProjectContextsHandler>()
                 .AddSingleton<ILspLogger>(logger)
+                .AddSingleton<ILspTelemetry>(NullTelemetry.Instance)
                 .AddSingleton<AbstractRequestContextFactory<FSharpRequestContext>, FShapRequestContextFactory>()
                 .AddSingleton<IInitializeManager<InitializeParams, InitializeResult>, CapabilitiesManager>()
                 .AddSingleton(this)

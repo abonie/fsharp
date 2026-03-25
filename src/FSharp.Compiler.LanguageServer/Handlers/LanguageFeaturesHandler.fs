@@ -24,6 +24,13 @@ type LanguageFeaturesHandler() =
             (request: DocumentDiagnosticParams, context: FSharpRequestContext, cancellationToken: CancellationToken)
             =
             cancellableTask {
+                let telemetry = context.LspServices.GetRequiredService<ILspTelemetry>()
+
+                use _scope =
+                    telemetry.ReportEventWithDuration(
+                        TelemetryEvents.GetDiagnostics,
+                        [| "uri_hash", hash request.TextDocument.Uri :> obj |]
+                    )
 
                 let! fsharpDiagnosticReport = context.Workspace.Query.GetDiagnosticsForFile request.TextDocument.Uri
 
