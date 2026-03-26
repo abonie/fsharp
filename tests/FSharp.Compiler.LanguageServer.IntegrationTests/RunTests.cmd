@@ -29,7 +29,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: Locate the compiled test assembly
-set "TESTDLL=%REPOROOT%\artifacts\bin\FSharp.Compiler.LanguageServer.IntegrationTests\%CONFIG%\net472\FSharp.Compiler.LanguageServer.IntegrationTests.dll"
+set "TESTDLL=%REPOROOT%\artifacts\bin\FSharp.Compiler.LanguageServer.IntegrationTests\%CONFIG%\net472\FSharp.Compiler.LanguageServer.IntegrationTests.exe"
 if not exist "%TESTDLL%" (
     echo ERROR: Test assembly not found at:
     echo   %TESTDLL%
