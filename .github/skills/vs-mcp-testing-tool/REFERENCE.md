@@ -31,41 +31,6 @@ Closes Visual Studio.
 vs-close
 ```
 
-## Chat Window
-
-### `chat-submit-prompt`
-
-Submits a prompt to the VS Copilot Chat window.
-
-```
-chat-submit-prompt "@test #file:'C:\path\to\Calculator.cs'"
-```
-
-- Annotations require **full absolute paths** enclosed in single quotes for file-based references.
-- This call is asynchronous — always follow with `chat-wait-complete`.
-
-### `chat-wait-complete`
-
-Waits for the chat response to complete.
-
-```
-chat-wait-complete
-chat-wait-complete timeoutSeconds=600
-```
-
-- Default timeout: 60 seconds.
-- Increase `timeoutSeconds` for large projects or solution-scoped generation (10+ minutes).
-
-### `get-last-message`
-
-Retrieves the last response from the chat session.
-
-```
-get-last-message
-```
-
-- Look for the `**Pass/Fail Summary**` line (`✅` or `❌`) in the response.
-
 ## Output Window
 
 ### `output-window-get-content`
@@ -81,7 +46,6 @@ Key panes:
 
 | Pane | Content |
 |---|---|
-| `GitHub Copilot Testing` | Agent execution logs, LLM traces, errors |
 | `Build` | MSBuild compilation output |
 | `Package Manager` | NuGet restore and package issues |
 
@@ -164,13 +128,10 @@ vs-inspect-lightbulb filePath="C:\path\to\File.cs" lineNumber=42
 
 ### System Requirements
 
-- Visual Studio 2022 with GitHub Copilot extension
+- Visual Studio 18
 - .NET 8 SDK or later
-- GitHub Copilot Testing extension enabled
 - Valid GitHub Copilot subscription
 
 ### VS Settings
 
-- **Enable the agent:** Tools → Options → GitHub → Copilot → Testing → "Enable GitHub Copilot testing"
-- **Enable logging:** Tools → Options → GitHub → Copilot → Testing → "Enable detailed logging"
-- **Check authentication:** Ensure GitHub account is properly connected
+- **F# LSP settings:** Tools → Options → F# LSP → "Get diagnostics from"
