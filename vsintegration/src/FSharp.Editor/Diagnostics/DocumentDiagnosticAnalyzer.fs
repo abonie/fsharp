@@ -3,6 +3,7 @@
 namespace Microsoft.VisualStudio.FSharp.Editor
 
 open System
+
 open System.Composition
 open System.Collections.Immutable
 open System.Collections.Generic
