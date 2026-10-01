@@ -3,6 +3,7 @@ namespace FSharp.Compiler.LanguageServer
 open System
 open System.Diagnostics
 open System.Runtime.CompilerServices
+open System.Text.Json
 
 open FSharp.Compiler.LanguageServer.Common
 open FSharp.Compiler.LanguageServer.Handlers
@@ -23,11 +24,6 @@ module Stuff =
     [<Literal>]
     let FSharpLanguageName = "F#"
 
-    let createConfiguredSerializer () =
-        let s = Newtonsoft.Json.JsonSerializer.CreateDefault()
-        VSExtensionUtilities.AddVSExtensionConverters(s)
-        s
-
 [<Extension>]
 type Extensions =
 
@@ -38,14 +34,14 @@ type Extensions =
 type FSharpLanguageServer
     (
         jsonRpc: JsonRpc,
+        serializerOptions: JsonSerializerOptions,
         logger: ILspLogger,
         ?initialWorkspace: FSharpWorkspace,
         ?addExtraHandlers: Action<IServiceCollection>,
         ?config: FSharpLanguageServerConfig
     ) =
 
-    // TODO: Switch to SystemTextJsonLanguageServer
-    inherit NewtonsoftLanguageServer<FSharpRequestContext>(jsonRpc, createConfiguredSerializer (), logger)
+    inherit SystemTextJsonLanguageServer<FSharpRequestContext>(jsonRpc, serializerOptions, logger)
 
     let config = defaultArg config FSharpLanguageServerConfig.Default
     let initialWorkspace = defaultArg initialWorkspace (FSharpWorkspace())
@@ -104,8 +100,8 @@ type FSharpLanguageServer
         let struct (clientStream, serverStream) = FullDuplexStream.CreatePair()
 
         // TODO: handle disposal of these
-        let formatter = new JsonMessageFormatter()
-        VSExtensionUtilities.AddVSExtensionConverters(formatter.JsonSerializer)
+        let formatter = new SystemTextJsonFormatter()
+        addVSExtensionJsonConverters formatter.JsonSerializerOptions
 
         let messageHandler =
             new HeaderDelimitedMessageHandler(serverStream, serverStream, formatter)
@@ -118,7 +114,14 @@ type FSharpLanguageServer
         jsonRpc.TraceSource.Switch.Level <- SourceLevels.All
 
         let server =
-            new FSharpLanguageServer(jsonRpc, logger, initialWorkspace, ?addExtraHandlers = addExtraHandlers, ?config = config)
+            new FSharpLanguageServer(
+                jsonRpc,
+                formatter.JsonSerializerOptions,
+                logger,
+                initialWorkspace,
+                ?addExtraHandlers = addExtraHandlers,
+                ?config = config
+            )
 
         jsonRpc.StartListening()
 

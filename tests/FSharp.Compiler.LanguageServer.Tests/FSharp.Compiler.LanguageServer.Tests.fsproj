@@ -21,6 +21,7 @@
 		<Compile Include="DiagnosticsProtocolTests.fs" />
 		<Compile Include="CodeActionProtocolTests.fs" />
 		<Compile Include="ProjectContextsProtocolTests.fs" />
+		<Compile Include="ProjectContextSelectionTests.fs" />
 	</ItemGroup>
 
 	<ItemGroup>

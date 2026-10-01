@@ -7,17 +7,102 @@ open System
 open System.Diagnostics
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
+open System.Text.Json.Serialization
 
 open FSharp.Compiler.CodeAnalysis.ProjectSnapshot
 open FSharp.Compiler.Diagnostics
 open System.Runtime.CompilerServices
 
 #nowarn "57"
+#nowarn "3261"
 
 [<AutoOpen>]
 module Utils =
 
     type LspRange = Microsoft.VisualStudio.LanguageServer.Protocol.Range
+
+    type private TextDocumentIdentifierJsonConverter() =
+        inherit JsonConverter<TextDocumentIdentifier>()
+
+        override _.Read(reader: byref<Utf8JsonReader>, _typeToConvert: Type, _options: JsonSerializerOptions) =
+            use document = JsonDocument.ParseValue(&reader)
+            let root = document.RootElement
+            let mutable uriElement = Unchecked.defaultof<JsonElement>
+
+            if not (root.TryGetProperty("uri", &uriElement)) then
+                raise (JsonException("Text document identifier is missing its uri"))
+
+            let uriString =
+                uriElement.GetString()
+                |> Option.ofObj
+                |> Option.defaultWith (fun () -> raise (JsonException("Text document identifier uri cannot be null")))
+
+            let uri = Uri(uriString)
+            let mutable projectContextElement = Unchecked.defaultof<JsonElement>
+
+            if
+                root.TryGetProperty("_vs_projectContext", &projectContextElement)
+                && projectContextElement.ValueKind = JsonValueKind.Object
+            then
+                let getRequiredString (propertyName: string) =
+                    projectContextElement.GetProperty(propertyName).GetString()
+                    |> Option.ofObj
+                    |> Option.defaultWith (fun () -> raise (JsonException($"Project context property '{propertyName}' cannot be null")))
+
+                let projectContext =
+                    VSProjectContext(
+                        Id = getRequiredString "_vs_id",
+                        Label = getRequiredString "_vs_label",
+                        Kind = enum<VSProjectKind> (projectContextElement.GetProperty("_vs_kind").GetInt32())
+                    )
+
+                VSTextDocumentIdentifier(Uri = uri, ProjectContext = projectContext) :> TextDocumentIdentifier
+            else
+                TextDocumentIdentifier(Uri = uri)
+
+        override _.Write(writer: Utf8JsonWriter, value: TextDocumentIdentifier, _options: JsonSerializerOptions) =
+            writer.WriteStartObject()
+
+            if obj.ReferenceEquals(value.Uri, null) then
+                writer.WriteNull("uri")
+            else
+                writer.WriteString("uri", value.Uri.ToString())
+
+            match value with
+            | :? VSTextDocumentIdentifier as vsDocument when not (isNull (box vsDocument.ProjectContext)) ->
+                let projectContext = vsDocument.ProjectContext
+                writer.WriteStartObject("_vs_projectContext")
+                writer.WriteString("_vs_id", projectContext.Id)
+                writer.WriteString("_vs_label", projectContext.Label)
+                writer.WriteNumber("_vs_kind", int projectContext.Kind)
+                writer.WriteEndObject()
+            | _ -> ()
+
+            writer.WriteEndObject()
+
+    type private DiagnosticJsonConverter(optionsWithoutThisConverter: JsonSerializerOptions) =
+        inherit JsonConverter<Diagnostic>()
+
+        override _.Read(reader: byref<Utf8JsonReader>, _typeToConvert: Type, _options: JsonSerializerOptions) =
+            use document = JsonDocument.ParseValue(&reader)
+            let root = document.RootElement
+            let mutable projectsElement = Unchecked.defaultof<JsonElement>
+
+            if root.TryGetProperty("_vs_projects", &projectsElement) then
+                JsonSerializer.Deserialize<VSDiagnostic>(root, optionsWithoutThisConverter) :> Diagnostic
+            else
+                JsonSerializer.Deserialize<Diagnostic>(root, optionsWithoutThisConverter)
+
+        override _.Write(writer: Utf8JsonWriter, value: Diagnostic, options: JsonSerializerOptions) =
+            match value with
+            | :? VSDiagnostic as vsDiagnostic -> JsonSerializer.Serialize(writer, vsDiagnostic, options)
+            | _ -> JsonSerializer.Serialize(writer, value, optionsWithoutThisConverter)
+
+    let addVSExtensionJsonConverters (options: JsonSerializerOptions) =
+        options.Converters.Add(TextDocumentIdentifierJsonConverter())
+        let diagnosticOptions = JsonSerializerOptions(options)
+        options.Converters.Add(DiagnosticJsonConverter(diagnosticOptions))
 
     /// Encodes a stable, round-trippable identifier for a project context. The encoding includes the
     /// output file name so that different target frameworks of a multi-targeting project produce
@@ -36,6 +121,7 @@ module Utils =
             None
         else
             let parts = contextId.Split('|', 3)
+
             if parts.Length = 3 then
                 Some(FSharpProjectIdentifier(parts[2], parts[1]))
             else
@@ -100,6 +186,7 @@ type FSharpDiagnosticExtensions =
             | FSharpDiagnosticSeverity.Warning -> DiagnosticSeverity.Warning
             | FSharpDiagnosticSeverity.Info -> DiagnosticSeverity.Information
             | FSharpDiagnosticSeverity.Hidden -> DiagnosticSeverity.Hint
+
         VSDiagnostic(
             Range = this.Range.ToLspRange(),
             Severity = severity,

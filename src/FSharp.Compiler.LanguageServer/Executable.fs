@@ -6,9 +6,16 @@ open StreamJsonRpc
 [<EntryPoint>]
 let main _argv =
 
-    let jsonRpc = new JsonRpc(Console.OpenStandardOutput(), Console.OpenStandardInput())
+    let formatter = new SystemTextJsonFormatter()
+    addVSExtensionJsonConverters formatter.JsonSerializerOptions
 
-    let _s = new FSharpLanguageServer(jsonRpc, (LspLogger Console.Out.Write))
+    let messageHandler =
+        new HeaderDelimitedMessageHandler(Console.OpenStandardOutput(), Console.OpenStandardInput(), formatter)
+
+    let jsonRpc = new JsonRpc(messageHandler)
+
+    let _s =
+        new FSharpLanguageServer(jsonRpc, formatter.JsonSerializerOptions, (LspLogger Console.Out.Write))
 
     jsonRpc.StartListening()
 

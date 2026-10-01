@@ -47,6 +47,7 @@ internal class VsServerCapabilitiesOverride : IServerCapabilitiesOverride
         var capabilities = new VSInternalServerCapabilities
         {
             TextDocumentSync = value.TextDocumentSync,
+            DiagnosticOptions = value.DiagnosticOptions,
             SupportsDiagnosticRequests = config.EnabledFeatures.Diagnostics,
             ProjectContextProvider = true,
             CodeActionProvider = config.EnabledFeatures.CodeActions
