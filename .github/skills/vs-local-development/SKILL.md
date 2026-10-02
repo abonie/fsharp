@@ -22,7 +22,7 @@ After making code changes to the VS extension, follow these steps **in order** t
 Run the helper script to close any running experimental instances:
 
 ```powershell
-.github/skills/vs-local-development/scripts/close-exp-instances.ps1
+.github\skills\vs-local-development\scripts\close-exp-instances.ps1
 ```
 
 This kills all `devenv.exe` processes launched with `/rootsuffix`.
@@ -32,52 +32,39 @@ This kills all `devenv.exe` processes launched with `/rootsuffix`.
 Run the build script:
 
 ```powershell
-./Build.cmd -c Debug
+.\Build.cmd -c Debug
 ```
 
 ### 3. Deploy the VSIX
 
-Use the deploy script to install the VSIX, wait for the installer to finish, and clear caches in one step:
+Choose a Visual Studio installation using `vswhere.exe`, which is installed with the Visual Studio Installer:
 
 ```powershell
-.github/skills/vs-local-development/scripts/deploy-to-vs.ps1 "artifacts\VSSetup\Debug\VisualFSharpDebug.vsix"
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+& $vswhere -all -prerelease -format json -utf8 |
+    ConvertFrom-Json |
+    Select-Object instanceId, installationPath
 ```
 
-This script:
-- Installs the VSIX into the experimental hive (`/rootSuffix:exp`)
-
-**Shell requirement:** `VSIXInstaller.exe` and `devenv.exe` must be on `PATH`. Run from a **Visual Studio Developer PowerShell** / **Developer Command Prompt**, or use the discovery snippet below.
-
-### Finding devenv.exe
-
-VS installation folders use **numeric version identifiers** (e.g., `18`), not marketing years (e.g., `2026`), and may be under `Program Files` or `Program Files (x86)`. Editions vary (`IntPreview`, `Enterprise`, `Preview`, `Community`, etc.).
-
-Use this snippet to find `devenv.exe` dynamically:
+Set `$instanceId` to the chosen installation's ID, then deploy:
 
 ```powershell
-$devenv = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio" `
-    -Filter "devenv.exe" -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match 'Common7\\IDE\\devenv\.exe$' } |
-    Select-Object -First 1 -ExpandProperty FullName
-
-if (-not $devenv) { Write-Error "devenv.exe not found"; exit 1 }
-Write-Host "Using: $devenv"
+$instanceId = 'INSTANCE_ID'
+.github\skills\vs-local-development\scripts\deploy-to-vs.ps1 `
+    "artifacts\VSSetup\Debug\VisualFSharpDebug.vsix" -InstanceId $instanceId
 ```
 
-Then source the Developer environment and deploy:
-
-```powershell
-$vsDir = Split-Path (Split-Path (Split-Path $devenv))   # …\Common7\IDE → VS root
-& "$vsDir\Common7\Tools\VsDevCmd.bat"
-.github/skills/vs-local-development/scripts/deploy-to-vs.ps1 "artifacts\VSSetup\Debug\VisualFSharpDebug.vsix"
-```
+The script installs only into that installation's experimental hive (`/rootSuffix:exp`), waits for the installer, then uses that same installation's `devenv.exe` to clear caches and update configuration. The executables do not need to be on `PATH`; an unknown instance ID or missing executable is an error.
 
 ### 4. Reopen VS
 
-The extension is now installed. Open the experimental instance normally:
+Open the selected installation's experimental instance:
 
 ```powershell
-devenv /rootsuffix exp
+$installation = & $vswhere -all -prerelease -format json -utf8 |
+    ConvertFrom-Json |
+    Where-Object { $_.instanceId -eq $instanceId }
+& (Join-Path $installation.installationPath 'Common7\IDE\devenv.exe') /rootsuffix exp
 ```
 
 ## Quick Reference (Copy-Paste)
@@ -86,16 +73,22 @@ Full sequence for a rebuild cycle:
 
 ```powershell
 # 1. Stop experimental instances
-.github/skills/vs-local-development/scripts/close-exp-instances.ps1
+.github\skills\vs-local-development\scripts\close-exp-instances.ps1
 
 # 2. Rebuild
-./Build.cmd -c Debug
+.\Build.cmd -c Debug
 
-# 3. Deploy VSIX (install, wait, clear caches)
-.github/skills/vs-local-development/scripts/deploy-to-vs.ps1 "artifacts\VSSetup\Debug\VisualFSharpDebug.vsix"
+# 3. Select an instance ID reported by vswhere.exe and deploy
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$instanceId = 'INSTANCE_ID'
+.github\skills\vs-local-development\scripts\deploy-to-vs.ps1 `
+    "artifacts\VSSetup\Debug\VisualFSharpDebug.vsix" -InstanceId $instanceId
 
 # 4. Reopen VS with the updated extension
-devenv /rootsuffix exp
+$installation = & $vswhere -all -prerelease -format json -utf8 |
+    ConvertFrom-Json |
+    Where-Object { $_.instanceId -eq $instanceId }
+& (Join-Path $installation.installationPath 'Common7\IDE\devenv.exe') /rootsuffix exp
 ```
 
 ## Key Concepts
@@ -108,10 +101,10 @@ Visual Studio supports **experimental instances** (`/rootsuffix exp`) — isolat
 
 | Problem | Solution |
 |---|---|
-| VSIX install fails | Ensure all experimental VS instances are closed (`.github/skills/vs-local-development/scripts/close-exp-instances.ps1`) |
-| Extension not appearing in VS | Re-run `deploy-to-vs.ps1` or manually run `devenv /rootsuffix exp /clearcache` and `/updateconfiguration` |
+| VSIX install fails | Ensure all experimental VS instances are closed (`.github\skills\vs-local-development\scripts\close-exp-instances.ps1`) |
+| Extension not appearing in VS | Re-run `deploy-to-vs.ps1` with the intended `-InstanceId` |
 | Old version still loaded | Delete `artifacts/` and rebuild |
-| `devenv.exe` not found | VS folders use numeric versions (e.g., `18`), not years. Use the discovery snippet in the Deploy section above |
+| Instance ID or executable not found | Check `vswhere.exe` output and ensure the selected Visual Studio installation is available |
 
 ## When to Use This Skill
 
