@@ -166,6 +166,7 @@ type EditorOptions() =
     member _.LanguageServicePerformance: LanguageServicePerformanceOptions = store.Get()
     member _.Advanced: AdvancedOptions = store.Get()
     member _.Formatting: FormattingOptions = store.Get()
+    member internal _.SettingsChanged = store.Changed
 
     [<Export(typeof<SettingsStore.ISettingsStore>)>]
     member _.SettingsStore = store

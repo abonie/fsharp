@@ -10,6 +10,7 @@ open Newtonsoft.Json
 
 module SettingsStore =
     type ISettingsStore =
+        abstract member Changed: IEvent<unit>
         abstract member LoadSettings: unit -> 't
         abstract member SaveSettings: 't -> unit
         abstract member Register: 't -> unit
@@ -42,6 +43,7 @@ module SettingsStore =
 
     type PersistentStore(settingsManager: ISettingsManager) =
         let cache = Cache()
+        let changed = Event<unit>()
 
         let updateFromStore settings =
             // Make a deep copy so that PopulateObject does not alter the original.
@@ -65,10 +67,15 @@ module SettingsStore =
             // This event is also raised when a setting change occurs in another VS instance, so we can keep everything in sync.
             // Note: In experimental VS instance it only picks up local changes.
             subset.add_SettingChangedAsync (
-                PropertyChangedAsyncEventHandler(fun _ e -> backgroundTask { (getValue cache: 't) |> updateFromStore |> setValue cache })
+                PropertyChangedAsyncEventHandler(fun _ _ ->
+                    backgroundTask {
+                        (getValue cache: 't) |> updateFromStore |> setValue cache
+                        changed.Trigger()
+                    })
             )
 
         interface ISettingsStore with
+            member _.Changed = changed.Publish
 
             // Used by the AbstractOptionPage to populate dialog controls.
             // We always have the latest value in the cache so we just return
@@ -89,10 +96,16 @@ module SettingsStore =
 
     type InMemorySettingsStore() =
         let cache = Cache()
+        let changed = Event<unit>()
 
         interface ISettingsStore with
+            member _.Changed = changed.Publish
             member _.LoadSettings() = cache |> getValue |> clone
-            member _.SaveSettings(settings) = settings |> setValue cache
+
+            member _.SaveSettings(settings) =
+                settings |> setValue cache
+                changed.Trigger()
+
             member _.Register(defaultSettings) = defaultSettings |> setValue cache
             member _.Get() = cache |> getValue
 
